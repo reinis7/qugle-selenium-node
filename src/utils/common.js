@@ -18,35 +18,38 @@ import { spawn } from "child_process";
 // Config (tweak as needed)
 // ---------------------------
 const LOG_DIR = process.env.LOG_DIR || path.resolve("./logs");
-const CHROME_TEMP_DIR = process.env.CHROME_TEMP_DIR || "C:/ChromeTEMP";
+const CHROME_TEMP_DIR = process.env.CHROME_TEMP_DIR || "/chromeTEMP";
 const CHROME_EXE_PATH =
     process.env.CHROME_EXE_PATH ||
-    "C:/Program Files/Google/Chrome/Application/chrome.exe";
+    "/usr/bin/google-chrome-stable";
 const GOOGLE_CHROME_START_URL =
     process.env.GOOGLE_CHROME_START_URL || "https://accounts.google.com";
 
 // Start user IDs at (>=) this number
-let last_user_id = Number(process.env.USER_ID_START || 9700);
+let last_user_id = Number(process.env.USER_ID_START || 9200);
 
 // In-memory registries
 const emailToUserId = new Map();   // email -> userId
 const userIdToPid = new Map();   // userId -> pid
 
-// Ensure folders exist
-for (const dir of [LOG_DIR, CHROME_TEMP_DIR]) {
-    try { fs.mkdirSync(dir, { recursive: true }); } catch { }
-}
-
-// Initialize last_user_id by scanning existing log folders (user_log_<id>)
-try {
-    const entries = fs.readdirSync(LOG_DIR, { withFileTypes: true });
-    for (const d of entries) {
-        if (d.isDirectory() && d.name.startsWith("user_log_")) {
-            const n = Number(d.name.slice("user_log_".length));
-            if (!Number.isNaN(n)) last_user_id = Math.max(last_user_id, n + 1);
-        }
+export function initRendering() {
+    // Ensure folders exist
+    for (const dir of [LOG_DIR, CHROME_TEMP_DIR]) {
+        try { fs.mkdirSync(dir, { recursive: true }); } catch { }
     }
-} catch { /* ignore */ }
+
+    // Initialize last_user_id by scanning existing log folders (user_log_<id>)
+    try {
+        const entries = fs.readdirSync(LOG_DIR, { withFileTypes: true });
+        for (const d of entries) {
+            if (d.isDirectory() && d.name.startsWith("user_log_")) {
+                const n = Number(d.name.slice("user_log_".length));
+                if (!Number.isNaN(n)) last_user_id = Math.max(last_user_id, n + 1);
+            }
+        }
+    } catch { /* ignore */ }
+
+}
 
 // ---------------------------
 // Logging
@@ -185,3 +188,4 @@ export function expire_user(user_id) {
     userIdToPid.delete(user_id);
     // Keep logs; caller can remove if desired
 }
+

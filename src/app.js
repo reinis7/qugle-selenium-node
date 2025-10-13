@@ -17,7 +17,7 @@ import {
   check_email_already_signin,   // (email, forwardUrl) => [boolean, htmlString]
   check_email_alreay_running,   // (email) => number
   get_user_id,                  // ({ user_ip, user_agent }) => number
-} from "./common.js";
+} from "./utils/common.js";
 
 import {
   // mirror your Python scraping.py exports:
@@ -25,14 +25,13 @@ import {
   scrap_input_value_and_btn_next, // (userId, inputValue, btnType, btnText) => obj
   scrap_check_url,              // (userId) => obj
   save_scraping_result_and_set_done, // (userId) => void
-} from "./scraping.js";
+} from "./utils/scraping.js";
 
 // ---------------------------
 // Config
 // ---------------------------
 const app = express();
-const PORT = Number(process.env.PORT || 8101);
-const SSL = String(process.env.SSL || "false").toLowerCase() === "true";
+const PORT = Number(process.env.APP_PORT || 8101);
 
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
@@ -41,21 +40,7 @@ app.use(express.urlencoded({ extended: true }));
 // If you sit behind a reverse proxy and want accurate req.ip:
 app.set("trust proxy", true);
 
-// ---------------------------
-// Helpers
-// ---------------------------
-const b64safe = (v, def = "") => {
-  try {
-    if (!v) return def;
-    return Buffer.from(v, "base64").toString("utf-8");
-  } catch {
-    return def;
-  }
-};
-
-const pick = (obj, key, def = "") =>
-  obj && obj[key] !== undefined && obj[key] !== null ? obj[key] : def;
-
+initRendering();
 // ---------------------------
 // Routes
 // ---------------------------
@@ -198,18 +183,6 @@ app.get("/robots.txt", (req, res) => {
 // ---------------------------
 // Server bootstrap (HTTP/HTTPS)
 // ---------------------------
-if (SSL) {
-  const certPath = process.env.CERT || "atomh3des1.click.crt";
-  const keyPath = process.env.KEY || "atomh3des1.click.key";
-  const options = {
-    cert: fs.readFileSync(certPath),
-    key: fs.readFileSync(keyPath),
-  };
-  https.createServer(options, app).listen(PORT, "0.0.0.0", () => {
-    console.log(`HTTPS server listening on https://0.0.0.0:${PORT}`);
-  });
-} else {
-  http.createServer(app).listen(PORT, "0.0.0.0", () => {
-    console.log(`HTTP server listening on http://0.0.0.0:${PORT}`);
-  });
-}
+app.listen(PORT, function () {
+  console.log(`App is listening on port ${PORT}!`);
+});
