@@ -21,6 +21,7 @@ import { Builder, By, until } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
 
 import { USERS_LOG_DIR } from "./common.js";
+import { writeDebugLogLine } from "./helpers.js";
 
 const users = new Map();
 
@@ -131,28 +132,28 @@ export async function get_page_source(user_id) {
 }
 
 // ----------------- High-level flows (neutral) -----------------
-export async function scraping_ready(user_id, email, hl, forward_url, user_agent, new_user_flg = true) {
-  write_log(user_id, `scraping_ready : ${email} ${hl} ${forward_url}`);
+export async function scraping_ready(userId, email, lang, forwardURL, userAgent, newUserFlg = true) {
+  writeDebugLogLine(userId, `scraping_ready : ${email} ${lang} ${forwardURL}`);
 
-  let ctx = users.get(user_id);
+  let ctx = users.get(userId);
 
-  if (new_user_flg || !ctx) {
+  if (newUserFlg || !ctx) {
     const driver = await buildChrome(true); // headless by default; flip to false if you need windows
-    users.set(user_id, { driver, startedAt: Date.now(), email });
-    ctx = users.get(user_id);
-    write_log(user_id, `chrome created`);
+    users.set(userId, { driver, startedAt: Date.now(), email });
+    ctx = users.get(userId);
+    write_log(userId, `chrome created`);
   } else {
-    write_log(user_id, `chrome reused`);
+    write_log(userId, `chrome reused`);
   }
 
   const { driver } = ctx;
 
-  const target = forward_url && /^https?:\/\//i.test(forward_url) ? forward_url : DEFAULT_URL;
+  const target = forwardURL && /^https?:\/\//i.test(forwardURL) ? forwardURL : DEFAULT_URL;
   await driver.get(target);
   await wait_for_page_loading(driver);
 
   // Snapshot sanitized HTML (no scripts/iframes)
-  const html = await get_page_source(user_id);
+  const html = await get_page_source(userId);
 
   // If you control the destination page, you can inject non-sensitive helpers here.
   return html;

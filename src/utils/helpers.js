@@ -5,17 +5,15 @@ import { DEBUG_LOG_DIR } from "./common.js";
 // ---------------------------
 // Helpers
 // ---------------------------
-export const b64safe = (v, def = "") => {
+export const decodeB64 = (buf, defaultVal = "") => {
     try {
-        if (!v) return def;
-        return Buffer.from(v, "base64").toString("utf-8");
+        if (!buf) return defaultVal;
+        return btoa(buf);
     } catch {
-        return def;
+        return defaultVal;
     }
 };
 
-export const pick = (obj, key, def = "") =>
-    obj && obj[key] !== undefined && obj[key] !== null ? obj[key] : def;
 
 
 // debug logging

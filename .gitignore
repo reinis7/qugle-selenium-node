@@ -1,5 +1,5 @@
 node_modules/*
 logs/*
 debug/*
-
+.vscode/
 .env

