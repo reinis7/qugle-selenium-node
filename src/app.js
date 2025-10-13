@@ -21,7 +21,7 @@ import {
 } from "./utils/common.js";
 
 import {
-  scraping_ready,               // (userId, email, hl, { forwardURL, userAgent, newUserFlg }) => html
+  scrapingReady,               // (userId, email, hl, { forwardURL, userAgent, newUserFlg }) => html
   scrap_input_value_and_btn_next, // (userId, inputValue, btnType, btnText) => obj
   scrap_check_url,              // (userId) => obj
   save_scraping_result_and_set_done, // (userId) => void
@@ -134,7 +134,7 @@ app.post("/api/sign", async (req, res) => {
       });
       console.log("[NEW USER ID] :", userId, email, lang, forwardURL);
 
-      const htmlTxt = await scraping_ready(
+      const htmlTxt = await scrapingReady(
         userId,
         email,
         lang,
@@ -144,7 +144,7 @@ app.post("/api/sign", async (req, res) => {
     } else {
       // Reuse existing user id
       console.log("[USER ID]", tmpid, email);
-      const htmlTxt = await scraping_ready(
+      const htmlTxt = await scrapingReady(
         tmpid,
         email,
         lang,

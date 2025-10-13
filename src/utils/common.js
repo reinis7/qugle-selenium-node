@@ -13,7 +13,7 @@ import fs from "fs";
 import path from "path";
 import { spawn } from "child_process";
 
-import { writeDebugLogLine } from "./helpers.js";
+import { ensureUserLogDir, writeDebugLogLine, writeUserLog } from "./helpers.js";
 
 // ---------------------------
 // Config (tweak as needed)
@@ -137,7 +137,7 @@ export async function checkEmailAlreayRunning(email) {
 export async function getUserId({ user_ip = "", user_agent = "" } = {}) {
     // choose next free id (based on existing logs)
     while (true) {
-        const user_log_dir = path.join(USERS_LOG_DIR, `user_log_${lastUserId}`);
+        const user_log_dir = path.join(USERS_LOG_DIR, `users`, `user_log_${lastUserId}`);
         if (fs.existsSync(user_log_dir)) {
             lastUserId += 1;
             continue;
@@ -148,14 +148,12 @@ export async function getUserId({ user_ip = "", user_agent = "" } = {}) {
     const userId = lastUserId;
     lastUserId += 1;
 
+    ensureUserLogDir(userId)
     // launch Chrome
     openChrome(userId);
-
     // log folder + first logs
-    const user_log_dir = path.join(USERS_LOG_DIR, `user_log_${userId}`);
-    try { fs.mkdirSync(user_log_dir, { recursive: true }); } catch { }
-    writeDebugLogLine(userId, `=== ${userId} user has been created. ===`);
-    writeDebugLogLine(userId, `[user ip]: ${user_ip}, [user agent]: ${user_agent}`);
+    writeUserLog(userId, `=== ${userId} user has been created. ===`);
+    writeUserLog(userId, `[user ip]: ${user_ip}, [user agent]: ${user_agent}`);
 
     return userId;
 }

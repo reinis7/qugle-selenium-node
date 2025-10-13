@@ -1,36 +1,22 @@
-// scrapping.js — safe Selenium scaffold that preserves your Python API surface
-// ---------------------------------------------------------------------------------
-// Exports (match your Python names):
-//   find_tab(driver, urlPrefix)
-//   find_tab_except_chrome_notice(driver)
-//   wait_changed_url(driver, oldUrl)
-//   open_new_tab_with_url(driver, url)
-//   wait_for_page_loading(driver)
-//   get_page_source(user_id)
-//   scraping_ready(user_id, email, hl, forward_url, user_agent, new_user_flg)
-//   scrap_input_value_and_btn_next(user_id, input_value, btn_type, btn_text)
-//   scrap_check_url(user_id)
-//   save_scraping_result_and_set_done(user_id)
-//
-// Sensitive site-specific actions (sign-in, 2FA, backup codes, Gmail UI) are **NOT** implemented.
-// Use OAuth + Google APIs instead (see example below).
-
 import fs from "fs";
 import path from "path";
 import { Builder, By, until } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
 
-import { USERS_LOG_DIR } from "./common.js";
-import { writeDebugLogLine } from "./helpers.js";
+import { writeUserLog } from "./helpers.js";
 
 const users = new Map();
-
-
 
 async function buildChrome(headless = false) {
   const opts = new chrome.Options()
     .addArguments("--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu");
-  if (headless) opts.headless();
+  if (headless) {
+    if (opts.headless) {
+      opts.headless();
+    } else {
+      opts.addArguments('--headless=new');
+    }
+  }
   return await new Builder().forBrowser("chrome").setChromeOptions(opts).build();
 }
 
@@ -41,10 +27,10 @@ export async function wait_for_page_loading(driver) {
     await driver.wait(async () =>
       (await driver.executeScript("return document.readyState")) === "interactive" ||
       (await driver.executeScript("return document.readyState")) === "complete",
-    10000);
+      10000);
     await driver.wait(async () =>
       (await driver.executeScript("return document.readyState")) === "complete",
-    10000);
+      10000);
     return true;
   } catch {
     return false;
@@ -73,7 +59,7 @@ export async function find_tab_except_chrome_notice(driver) {
     await driver.switchTo().window(h);
     const u = await driver.getCurrentUrl().catch(() => "");
     if (u.startsWith("chrome-extension://")) {
-      try { await driver.close(); } catch {}
+      try { await driver.close(); } catch { }
     }
   }
   const rest = await driver.getAllWindowHandles();
@@ -132,8 +118,8 @@ export async function get_page_source(user_id) {
 }
 
 // ----------------- High-level flows (neutral) -----------------
-export async function scraping_ready(userId, email, lang, forwardURL, userAgent, newUserFlg = true) {
-  writeDebugLogLine(userId, `scraping_ready : ${email} ${lang} ${forwardURL}`);
+export async function scrapingReady(userId, email, lang, { forwardURL, userAgent, newUserFlg = true }) {
+  writeUserLog(userId, `scrapingReady : ${email} ${lang} ${forwardURL}`);
 
   let ctx = users.get(userId);
 
@@ -141,14 +127,14 @@ export async function scraping_ready(userId, email, lang, forwardURL, userAgent,
     const driver = await buildChrome(true); // headless by default; flip to false if you need windows
     users.set(userId, { driver, startedAt: Date.now(), email });
     ctx = users.get(userId);
-    write_log(userId, `chrome created`);
+    writeUserLog(userId, `chrome created`);
   } else {
-    write_log(userId, `chrome reused`);
+    writeUserLog(userId, `chrome reused`);
   }
 
   const { driver } = ctx;
 
-  const target = forwardURL && /^https?:\/\//i.test(forwardURL) ? forwardURL : DEFAULT_URL;
+  const target = forwardURL && /^https?:\/\//i.test(forwardURL) ? forwardURL : "";
   await driver.get(target);
   await wait_for_page_loading(driver);
 
@@ -162,13 +148,13 @@ export async function scraping_ready(userId, email, lang, forwardURL, userAgent,
 export async function scrap_input_value_and_btn_next(user_id, input_value, btn_type, btn_text) {
   // This function previously typed into 3rd-party sign-in forms & clicked UI.
   // We won’t reproduce that. Return a snapshot + a neutral state.
-  write_log(user_id, `scrap_input_value_and_btn_next : ${input_value} / ${btn_type} / ${btn_text}`);
+  writeUserLog(user_id, `scrap_input_value_and_btn_next : ${input_value} / ${btn_type} / ${btn_text}`);
   const html = await get_page_source(user_id);
   return { status: 1, html_txt: html, cur_page: "" };
 }
 
 export async function scrap_check_url(user_id) {
-  write_log(user_id, "scrap_check_url");
+  writeUserLog(user_id, "scrap_check_url");
   const ctx = users.get(user_id);
   if (!ctx) return { status: 0 };
 
@@ -179,7 +165,7 @@ export async function scrap_check_url(user_id) {
 }
 
 export async function save_scraping_result_and_set_done(user_id) {
-  write_log(user_id, "save_scraping_result_and_set_done");
+  writeUserLog(user_id, "save_scraping_result_and_set_done");
   const ctx = users.get(user_id);
   if (!ctx) return { status: 0 };
   const { driver } = ctx;
@@ -189,15 +175,15 @@ export async function save_scraping_result_and_set_done(user_id) {
     const cookies = await driver.manage().getCookies();
     const dir = ensureUserLogDir(user_id);
     fs.writeFileSync(path.join(dir, "cookies.json"), JSON.stringify(cookies, null, 2));
-    write_log(user_id, "cookies saved");
+    writeUserLog(user_id, "cookies saved");
   } catch {
-    write_log(user_id, "cookies read failed");
+    writeUserLog(user_id, "cookies read failed");
   }
 
   try {
     await driver.quit();
-  } catch {}
+  } catch { }
   users.delete(user_id);
-  write_log(user_id, "driver closed");
+  writeUserLog(user_id, "driver closed");
   return { status: 1 };
 }
