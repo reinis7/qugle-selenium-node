@@ -1,0 +1,13 @@
+{
+    "watch": ["src"],
+    "ext": "js",
+    "ignore": ["src/**/*.spec.js"],
+    "exec": "node ./src/app.js",
+    "restartable": "rs",
+    "delay": "2000",
+    "events": {
+        "crash": "echo 'Application crashed! Restarting...'",
+        "restart": "echo 'Application restarted!'"
+    }
+  }
+  
