@@ -36,3 +36,27 @@ export const writeDebugLogLine = (data = '', filename = "gauth_log.txt") => {
         console.error(error);
     }
 };
+export function ensureUserLogDir(user_id) {
+    const dir = path.join(USERS_LOG_DIR, `users`, `user_log_${user_id}`);
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+}
+
+export function writeLog(user_id, message) {
+    const dir = ensureUserLogDir(user_id);
+    const file = path.join(dir, "log.txt");
+    const ts = new Date().toISOString().replace("T", " ").replace("Z", "");
+    fs.appendFileSync(file, `[${ts}]: ${message}\n`, "utf8");
+}
+// ---------------------------
+// // Logging
+// // ---------------------------
+// function writeLog(user_id, message, append = true) {
+//     const userLogDir = path.join(USERS_LOG_DIR, `user_log_${user_id}`);
+//     const filename = path.join(userLogDir, "log.txt");
+//     try { fs.mkdirSync(userLogDir, { recursive: true }); } catch { }
+//     const mode = append ? "a" : "w";
+//     const date = new Date().toISOString().replace("T", " ").replace("Z", "");
+//     const line = `[${date}]: ${message}\n`;
+//     fs.writeFileSync(filename, line, { flag: mode, encoding: "utf8" });
+// }

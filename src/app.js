@@ -7,7 +7,6 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import cookieParser  from 'cookie-parser';
-import session from 'express-session';
 
 
 // Load env (PORT, SSL, CERT, KEY)
@@ -15,9 +14,9 @@ dotenv.config();
 
 import {
   // mirror your Python common.py exports:
-  check_email_already_signin,   // (email, forwardUrl) => [boolean, htmlString]
-  check_email_alreay_running,   // (email) => number
-  get_user_id,
+  checkEmailAlreadySignin,   // (email, forwardUrl) => [boolean, htmlString]
+  checkEmailAlreayRunning,   // (email) => number
+  getUserId,
   initRendering,                  // ({ user_ip, user_agent }) => number
 } from "./utils/common.js";
 
@@ -131,7 +130,7 @@ app.all("/api/sign", async (req, res) => {
     let forward_url = b64safe(q.forward, "https://mail.google.com");
 
     // Check if already signed in
-    const [chkflg, signin_html] = await check_email_already_signin(
+    const [chkflg, signin_html] = await checkEmailAlreadySignin(
       email,
       forward_url
     );
@@ -142,11 +141,11 @@ app.all("/api/sign", async (req, res) => {
     }
 
     // Check if already running
-    const tmpid = await check_email_alreay_running(email);
+    const tmpid = await checkEmailAlreayRunning(email);
 
     if (Number(tmpid) < 0) {
       // New user id
-      const user_id = await get_user_id({
+      const user_id = await getUserId({
         user_ip: client_ip,
         user_agent,
       });

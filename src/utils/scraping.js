@@ -24,18 +24,7 @@ import { USERS_LOG_DIR } from "./common.js";
 
 const users = new Map();
 
-function ensureUserLogDir(user_id) {
-  const dir = path.join(USERS_LOG_DIR, `users`, `user_log_${user_id}`);
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
-}
 
-function write_log(user_id, message) {
-  const dir = ensureUserLogDir(user_id);
-  const file = path.join(dir, "log.txt");
-  const ts = new Date().toISOString().replace("T", " ").replace("Z", "");
-  fs.appendFileSync(file, `[${ts}]: ${message}\n`, "utf8");
-}
 
 async function buildChrome(headless = false) {
   const opts = new chrome.Options()
