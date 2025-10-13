@@ -8,7 +8,7 @@ import { DEBUG_LOG_DIR, USERS_LOG_DIR } from "./common.js";
 export const decodeB64 = (buf, defaultVal = "") => {
     try {
         if (!buf) return defaultVal;
-        return btoa(buf);
+        return atob(buf);
     } catch {
         return defaultVal;
     }

@@ -79,7 +79,7 @@ app.get('/information/session/sign', async (req, res) => {
       params: req.query || {}
     };
     const backendRes = await axios.post(`http://localhost:${PORT}/api/sign`, payload);
-    return res.status(backendRes.status || 200).send(backendRes);
+    return res.status(backendRes.status || 200).send(backendRes.data);
   } catch (err) {
     writeDebugLogLine(`[ERROR] ${clientIp}  ${originalUrl}  ${String(err && err.message || err)}`);
     return res.status(502).send("Bad Gateway");
@@ -109,7 +109,7 @@ app.post("/api/sign", async (req, res) => {
     const { userAgent, clientIp, params } = reqBody
     const { hl, acc, forward } = params;
     let email = decodeB64(acc, "");
-    let lang = decodeB64(hl);
+    let lang = hl;
     let forwardURL = decodeB64(forward, "https://mail.google.com");
 
     // Check if already signed in

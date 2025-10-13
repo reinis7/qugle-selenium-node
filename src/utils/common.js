@@ -67,11 +67,10 @@ function openChrome(user_id) {
         `--user-data-dir=${temp_dir}`,
         "--no-first-run",
         "--no-default-browser-check",
+        "--disable-gpu",
     ];
 
     // Windows: DETACHED_PROCESS (0x00000008)
-    const DETACHED_PROCESS = 0x00000008;
-
     const child = spawn(CHROME_EXE_PATH, args, {
         stdio: "ignore",
         shell: false,

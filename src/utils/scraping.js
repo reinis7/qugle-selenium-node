@@ -9,7 +9,8 @@ const users = new Map();
 
 async function buildChrome(headless = false) {
   const opts = new chrome.Options()
-    .addArguments("--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu");
+  
+  opts.addArguments("--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu");
   if (headless) {
     if (opts.headless) {
       opts.headless();
