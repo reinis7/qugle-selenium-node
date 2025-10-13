@@ -20,20 +20,12 @@ import path from "path";
 import { Builder, By, until } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
 
-import {
-  // from your common.js
-  // get_user_id, write_log, set_active_chrome_window, etc., if exported
-} from "./common.js";
+import { USERS_LOG_DIR } from "./common.js";
 
-// ---- Config ----
-const LOG_DIR = process.env.LOG_DIR || path.resolve("./logs");
-const DEFAULT_URL = "https://example.com"; // neutral default
-
-// Per-user registry: user_id -> { driver, startedAt, email, pid? }
 const users = new Map();
 
 function ensureUserLogDir(user_id) {
-  const dir = path.join(LOG_DIR, `user_log_${user_id}`);
+  const dir = path.join(USERS_LOG_DIR, `users`, `user_log_${user_id}`);
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

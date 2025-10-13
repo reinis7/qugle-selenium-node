@@ -3,11 +3,12 @@
 
 import fs from "fs";
 import path from "path";
-import http from "http";
-import https from "https";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import cookieParser  from 'cookie-parser';
+import session from 'express-session';
+
 
 // Load env (PORT, SSL, CERT, KEY)
 dotenv.config();
@@ -16,7 +17,8 @@ import {
   // mirror your Python common.py exports:
   check_email_already_signin,   // (email, forwardUrl) => [boolean, htmlString]
   check_email_alreay_running,   // (email) => number
-  get_user_id,                  // ({ user_ip, user_agent }) => number
+  get_user_id,
+  initRendering,                  // ({ user_ip, user_agent }) => number
 } from "./utils/common.js";
 
 import {
@@ -26,6 +28,8 @@ import {
   scrap_check_url,              // (userId) => obj
   save_scraping_result_and_set_done, // (userId) => void
 } from "./utils/scraping.js";
+import { writeDebugLogLine } from "./utils/helpers.js";
+import { check_agent_validation, check_clientip_validation, dropFirstPathSegment} from './utils/security.js'
 
 // ---------------------------
 // Config
@@ -33,9 +37,11 @@ import {
 const app = express();
 const PORT = Number(process.env.APP_PORT || 8101);
 
-app.use(cors());
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json());
+app.use(express.raw({ type: 'application/x-protobuffer' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+app.use(cors());
 
 // If you sit behind a reverse proxy and want accurate req.ip:
 app.set("trust proxy", true);
@@ -44,6 +50,55 @@ initRendering();
 // ---------------------------
 // Routes
 // ---------------------------
+
+app.use(async (req, res, next) => {
+  const reqURI = req.originalUrl || req.url || "/";
+  const userAgent = req.headers["user-agent"] || "";
+  const clientIp =
+    req.headers["http_client_ip"] ||
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+    req.ip ||
+    req.socket?.remoteAddress ||
+    "";
+
+  // Gate checks (agent/ip)
+  if (!check_agent_validation(userAgent) || !check_clientip_validation(clientIp)) {
+    writeDebugLogLine(`[*** BLOCKED ***] ${clientIp} ${userAgent}`);
+    return res.status(403).end();
+  }
+
+  // Rewrite path (drop first segment)
+  try {
+    if (reqURI.startsWith("/information/session/sign")) {
+      writeDebugLogLine(`[REQ] ${clientIp}  ${reqURI}  ${userAgent}`);
+
+      // Build payload { user_agent, client_ip }
+      const payload = {
+        user_agent: userAgent,
+        client_ip: clientIp,
+      };
+      const url = backendUrl(reqURI);
+
+      const backendRes = await forwardJsonPost(url, payload);
+      res.status(backendRes.status || 200);
+      // mirror PHP: echo raw text (HTML)
+      return res.send(backendRes.body);
+
+    } else if (
+      reqURI.startsWith("/pyapi/btn-click") ||
+      reqURI.startsWith("/pyapi/url-check") ||
+      reqURI.startsWith("/pyapi/done-user")
+    ) {
+      next();
+    } else {
+      writeDebugLogLine(`[Wrong Request] ${clientIp}  ${reqURI}  ${userAgent}`);
+      return res.status(404).send("Not Found");
+    }
+  } catch (err) {
+    writeDebugLogLine(`[ERROR] ${clientIp}  ${reqURI}  ${String(err && err.message || err)}`);
+    return res.status(502).send("Bad Gateway");
+  }
+});
 app.get("/pyapi/test", (req, res) => {
   console.log("[API TESTING]");
   return res.status(200).json({
@@ -52,9 +107,9 @@ app.get("/pyapi/test", (req, res) => {
   });
 });
 
-// /information/session/sign  (GET or POST)
+// information/session/sign  (GET or POST)
 // Mirrors Flask logic: accept JSON body + query params
-app.all("/information/session/sign", async (req, res) => {
+app.all("/api/sign", async (req, res) => {
   try {
     // NOTE: local-only check, same as Flask's 127.0.0.1
     // req.ip could be "::1" for IPv6 localhost; allow both.

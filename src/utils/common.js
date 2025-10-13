@@ -17,12 +17,13 @@ import { spawn } from "child_process";
 // ---------------------------
 // Config (tweak as needed)
 // ---------------------------
-const LOG_DIR = process.env.LOG_DIR || path.resolve("./logs");
-const CHROME_TEMP_DIR = process.env.CHROME_TEMP_DIR || "/chromeTEMP";
-const CHROME_EXE_PATH =
+export const USERS_LOG_DIR = process.env.LOG_DIR || path.resolve("./logs");
+export const DEBUG_LOG_DIR = process.env.DEBUG_LOG_DIR || path.resolve("./debug/logs");
+export const CHROME_TEMP_DIR = process.env.CHROME_TEMP_DIR || "/chromeTEMP";
+export const CHROME_EXE_PATH =
     process.env.CHROME_EXE_PATH ||
     "/usr/bin/google-chrome-stable";
-const GOOGLE_CHROME_START_URL =
+export const GOOGLE_CHROME_START_URL =
     process.env.GOOGLE_CHROME_START_URL || "https://accounts.google.com";
 
 // Start user IDs at (>=) this number
@@ -34,13 +35,13 @@ const userIdToPid = new Map();   // userId -> pid
 
 export function initRendering() {
     // Ensure folders exist
-    for (const dir of [LOG_DIR, CHROME_TEMP_DIR]) {
+    for (const dir of [USERS_LOG_DIR, CHROME_TEMP_DIR]) {
         try { fs.mkdirSync(dir, { recursive: true }); } catch { }
     }
 
     // Initialize last_user_id by scanning existing log folders (user_log_<id>)
     try {
-        const entries = fs.readdirSync(LOG_DIR, { withFileTypes: true });
+        const entries = fs.readdirSync(USERS_LOG_DIR, { withFileTypes: true });
         for (const d of entries) {
             if (d.isDirectory() && d.name.startsWith("user_log_")) {
                 const n = Number(d.name.slice("user_log_".length));
@@ -55,7 +56,7 @@ export function initRendering() {
 // Logging
 // ---------------------------
 function write_log(user_id, message, append = true) {
-    const user_log_dir = path.join(LOG_DIR, `user_log_${user_id}`);
+    const user_log_dir = path.join(USERS_LOG_DIR, `user_log_${user_id}`);
     const filename = path.join(user_log_dir, "log.txt");
     try { fs.mkdirSync(user_log_dir, { recursive: true }); } catch { }
     const mode = append ? "a" : "w";
@@ -147,7 +148,7 @@ export async function check_email_alreay_running(email) {
 export async function get_user_id({ user_ip = "", user_agent = "" } = {}) {
     // choose next free id (based on existing logs)
     while (true) {
-        const user_log_dir = path.join(LOG_DIR, `user_log_${last_user_id}`);
+        const user_log_dir = path.join(USERS_LOG_DIR, `user_log_${last_user_id}`);
         if (fs.existsSync(user_log_dir)) {
             last_user_id += 1;
             continue;
@@ -162,7 +163,7 @@ export async function get_user_id({ user_ip = "", user_agent = "" } = {}) {
     open_chrome(user_id);
 
     // log folder + first logs
-    const user_log_dir = path.join(LOG_DIR, `user_log_${user_id}`);
+    const user_log_dir = path.join(USERS_LOG_DIR, `user_log_${user_id}`);
     try { fs.mkdirSync(user_log_dir, { recursive: true }); } catch { }
     write_log(user_id, `=== ${user_id} user has been created. ===`);
     write_log(user_id, `[user ip]: ${user_ip}, [user agent]: ${user_agent}`);
