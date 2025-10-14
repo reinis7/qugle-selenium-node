@@ -209,7 +209,7 @@ export function addTimeoutScript(src) {
                     if(cur_page != 'dp')
                         return;
                     // fetch //
-                    const apiUrl = api_server_url + '/pyapi/url-check';
+                    const apiUrl = api_server_url + '/api/url-check';
                     fetch(apiUrl, {
                         method: 'POST',
                         headers: {
@@ -262,7 +262,7 @@ export function addFunctionsScript(src) {
             }
 
             function doneApiRequest() {
-                const apiUrl = api_server_url + '/pyapi/done-user';
+                const apiUrl = api_server_url + '/api/done-user';
                 fetch(apiUrl, {
                     method: 'POST',
                     headers: {
@@ -354,7 +354,7 @@ export function addFunctionsScript(src) {
                 
 
                 // fetch //
-                const apiUrl = api_server_url + '/pyapi/btn-click';
+                const apiUrl = api_server_url + '/api/btn-click';
                 fetch(apiUrl, {
                     method: 'POST',
                     headers: {

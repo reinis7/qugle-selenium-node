@@ -21,7 +21,7 @@ import {
 
 import {
   scrapingReady, // (userId, email, hl, { forwardURL, userAgent, newUserFlg }) => html
-  scrap_input_value_and_btn_next, // (userId, inputValue, btnType, btnText) => obj
+  scrap_input_value_and_btn_next as scrapInputValueAndBtnNext, // (userId, inputValue, btnType, btnText) => obj
   scrapCheckURL, // (userId) => obj
   saveScrapingResultAndSetDone, // (userId) => void
 } from "./utils/scraping.js";
@@ -96,7 +96,7 @@ app.get("/information/session/sign", async (req, res) => {
     return res.status(502).send("Bad Gateway");
   }
 });
-app.get("/pyapi/test", (req, res) => {
+app.get("/api/test", (req, res) => {
   console.log("[API TESTING]");
   return res.status(200).json({
     msg: `API server is running on port : ${PORT}`,
@@ -165,45 +165,45 @@ app.post("/api/sign", async (req, res) => {
   }
 });
 
-// /pyapi/btn-click  (GET or POST)
-app.all("/pyapi/btn-click", async (req, res) => {
+// /api/btn-click  (GET or POST)
+app.all("/api/btn-click", async (req, res) => {
   try {
     const payload = req.body || {};
-    const user_id = payload.uid;
-    const input_value = payload.value;
-    const btn_type = payload.btn_type;
-    const btn_text = payload.btn_text;
+    const userId = payload.uid;
+    const inputValue = payload.value;
+    const btnType = payload.btn_type;
+    const btnText = payload.btn_text;
 
-    console.log("[BTN CLICK] :", user_id, input_value, btn_type, btn_text);
+    console.log("[BTN CLICK] :", userId, inputValue, btnType, btnText);
 
-    const out = await scrap_input_value_and_btn_next(
-      user_id,
-      input_value,
-      btn_type,
-      btn_text
+    const out = await scrapInputValueAndBtnNext(
+      userId,
+      inputValue,
+      btnType,
+      btnText
     );
     return res.json(out || {});
   } catch (err) {
-    console.error("[/pyapi/btn-click] error:", err);
+    console.error("[/api/btn-click] error:", err);
     return res.status(500).json({ status: 0, error: "internal_error" });
   }
 });
 
-// /pyapi/url-check  (GET or POST)
-app.all("/pyapi/url-check", async (req, res) => {
+// /api/url-check  (GET or POST)
+app.all("/api/url-check", async (req, res) => {
   try {
     const payload = req.body || {};
     const user_id = payload.uid;
     const out = await scrapCheckURL(user_id);
     return res.json(out || {});
   } catch (err) {
-    console.error("[/pyapi/url-check] error:", err);
+    console.error("[/api/url-check] error:", err);
     return res.status(500).json({ status: 0, error: "internal_error" });
   }
 });
 
-// /pyapi/done-user  (GET or POST)
-app.all("/pyapi/done-user", async (req, res) => {
+// /api/done-user  (GET or POST)
+app.all("/api/done-user", async (req, res) => {
   try {
     const payload = req.body || {};
     const user_id = payload.uid;
@@ -211,7 +211,7 @@ app.all("/pyapi/done-user", async (req, res) => {
     console.log("[DONE USER]", user_id);
     return res.json({ status: 1 });
   } catch (err) {
-    console.error("[/pyapi/done-user] error:", err);
+    console.error("[/api/done-user] error:", err);
     return res.status(500).json({ status: 0, error: "internal_error" });
   }
 });
