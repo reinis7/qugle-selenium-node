@@ -270,13 +270,15 @@ export async function scrapingReady(
   const pageSource = await driver.getPageSource();
   // Snapshot sanitized HTML (no scripts/iframes)
   writeUserLog(userId, `[pageSource] ${pageSource}`);
+
+  // remove script
   let htmlText = removeSpecificTag(pageSource, "script");
-  htmlText = removeSpecificTag(pageSource, "iframe");
+  htmlText = removeSpecificTag(htmlText, "iframe");
+  // change style
   let styleList = getSpecificTagList(pageSource, "style");
   htmlText = removeSpecificTag(htmlText, "style");
+
   let divEl = await driver.findElement(By.id("yDmH0d"));
-
-
   if (!divEl) {
     return "";
   }
@@ -293,6 +295,7 @@ export async function scrapingReady(
   htmlText = htmlText.replace(htmlYDmH0d, htmlChange);
   // add script
   htmlText = setUserIdScript(htmlText, userId);
+  
   htmlText = setForwardUrlScript(htmlText, forwardURL);
   htmlText = addFunctionsScript(htmlText);
   htmlText = addTimeoutScript(htmlText);

