@@ -11,7 +11,10 @@
 
 import fs from "fs";
 import path from "path";
-import { spawn } from "child_process";
+import { spawn, execFile } from "child_process";
+// file: setActiveChromeWindow.js
+import psList from "ps-list";
+import { promisify } from "util";
 
 import {
   ensureUserLogDir,
@@ -19,6 +22,7 @@ import {
   writeUserLog,
 } from "./helpers.js";
 import { createJSONDatabase } from "../db/jsonDB.js";
+import { checkProcessIsRunning } from "./scraping.js";
 
 // ---------------------------
 // Config (tweak as needed)
@@ -38,7 +42,7 @@ let lastUserId = Number(process.env.USER_ID_START || 9200);
 // In-memory registries
 const emailToUserId = new Map(); // email -> userId
 const userIdToPid = new Map(); // userId -> pid
-let UsersDB = null;
+export let UsersDB = null;
 
 //
 const STATUS_DONE = "DONE";
@@ -136,7 +140,8 @@ export async function checkEmailAlreadySignin(email, forwardUrl) {
   if (!email) return [false, ""];
 
   const resHtml = getHtmlAlreadySignIn(forwardUrl);
-  const allProfiles = await UsersDB.getAll();
+  const allProfiles = await UsersDB.getAllArray();
+  console.log("[allProfiles]", allProfiles);
   for (const profile of allProfiles) {
     if (profile["email"] == email && profile["status"] == STATUS_DONE) {
       return [true, resHtml];
@@ -152,14 +157,14 @@ export async function checkEmailAlreadySignin(email, forwardUrl) {
  * You can extend this to check OS processes or a DB if needed.
  */
 export async function checkEmailAlreayRunning(email) {
-  const allProfiles = await UsersDB.getAll();
+  const allProfiles = await UsersDB.getAllArray();
   for (const profile of allProfiles) {
     if (
       profile["status"] != STATUS_DONE &&
       (profile["email"] == email || profile["email"] == `${email}@gmail.com`)
     ) {
-      if (checkProcessIsRunning(user["PID"])) {
-        return user["PID"];
+      if (checkProcessIsRunning(profile["pid"])) {
+        return profile["userId"];
       }
     }
   }
@@ -217,12 +222,6 @@ export function expireUser(userId) {
   userIdToPid.delete(userId);
   // Keep logs; caller can remove if desired
 }
-
-// file: setActiveChromeWindow.js
-import psList from "ps-list";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import path from "node:path";
 
 const execFileAsync = promisify(execFile);
 
@@ -327,3 +326,83 @@ export async function setActiveChromeWindow(
   return -1;
 }
 
+
+// ---- Tunables (match your Python constants) ----
+const MAX_ONE_VIEW_CNT = 6;   // adjust as needed
+const PIX_STEP        = 30;   // adjust as needed
+const WND_W           = 1920; // desired window width
+const WND_H           = 1080;  // desired window height
+
+async function getScreenSize() {
+  // Parse from xdpyinfo: line like "dimensions:    1920x1080 pixels"
+  const { stdout } = await execFileAsync("xdpyinfo", []);
+  const m = stdout.match(/dimensions:\s+(\d+)x(\d+)\s+pixels/);
+  if (!m) throw new Error("Could not detect screen size (xdpyinfo).");
+  return { screen_w: Number(m[1]), screen_h: Number(m[2]) };
+}
+
+async function listWindowsByPid(pid) {
+  // xdotool: returns a list of window IDs for the given PID (may include hidden ones)
+  const { stdout } = await execFileAsync("xdotool", ["search", "--pid", String(pid)]);
+  const ids = stdout.split(/\s+/).map(s => s.trim()).filter(Boolean);
+  return ids;
+}
+
+async function getWindowTitle(winId) {
+  const { stdout } = await execFileAsync("xdotool", ["getwindowname", winId]);
+  return stdout.trim();
+}
+
+async function minimize(winId) {
+  // xdotool doesn't have direct "minimize" for arbitrary WMs, wmctrl can:
+  try {
+    await execFileAsync("wmctrl", ["-ir", winId, "-b", "add,hidden"]);
+  } catch {}
+}
+
+async function restoreAndActivate(winId) {
+  // Remove 'hidden' state, then activate/raise
+  try {
+    await execFileAsync("wmctrl", ["-ir", winId, "-b", "remove,hidden"]);
+  } catch {}
+  // Activate & raise
+  await execFileAsync("xdotool", ["windowactivate", "--sync", winId]);
+  await execFileAsync("wmctrl", ["-ia", winId]).catch(() => {}); // best-effort raise
+}
+
+async function moveAndResize(winId, x, y, w, h) {
+  // Move first, then size
+  await execFileAsync("xdotool", ["windowmove", winId, String(x), String(y)]);
+  await execFileAsync("xdotool", ["windowsize", winId, String(w), String(h)]);
+}
+
+/**
+ * Linux/X11 equivalent of activate_window_by_pid_1(user_id, pid).
+ * Finds a Chrome window for the PID, brings it to front, positions & resizes it.
+ * @returns {Promise<boolean>} true if a window was activated
+ */
+export async function activateUserWindowByPid(user_id, pid) {
+  const { screen_w, screen_h } = await getScreenSize();
+
+  const init_x = screen_w - WND_W - ((user_id - 9300) % MAX_ONE_VIEW_CNT) * PIX_STEP;
+  const init_y = screen_h - WND_H - ((user_id - 9300) % MAX_ONE_VIEW_CNT) * PIX_STEP;
+
+  const winIds = await listWindowsByPid(pid);
+  if (!winIds.length) return false;
+
+  // Find a Chrome window (title contains 'Chrome')
+  for (const wid of winIds) {
+    const title = await getWindowTitle(wid).catch(() => "");
+    if (!title || !/chrome/i.test(title)) continue;
+
+    // Mimic: minimize → show/activate → bring-to-top → move/resize
+    await minimize(wid).catch(() => {});
+    await restoreAndActivate(wid);
+    await moveAndResize(wid, init_x, init_y, WND_W, WND_H);
+
+    console.log(`Activate: ${pid} (${wid}) "${title}"`);
+    return true;
+  }
+
+  return false;
+}

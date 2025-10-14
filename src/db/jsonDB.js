@@ -29,6 +29,7 @@ export async function createJSONDatabase(filename) {
   }
 
   async function get(key) {
+    console.log('DB[get]', data, key, data[key])
     return data[key];
   }
 
@@ -41,10 +42,13 @@ export async function createJSONDatabase(filename) {
     return data;
   }
 
+  async function getAllArray() {
+    return Object.values(data);
+  }
+
   // Initialize once when created
   await init();
 
   // --- Return API ---
-  return { set, get, remove, getAll, save };
+  return { set, get, remove, getAll, getAllArray, save };
 }
-

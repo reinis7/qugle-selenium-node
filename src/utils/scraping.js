@@ -5,7 +5,11 @@ import chrome from "selenium-webdriver/chrome.js";
 import psList from "ps-list";
 
 import { writeUserLog } from "./helpers.js";
-import { setActiveChromeWindow } from "./common.js";
+import {
+  activateUserWindowByPid,
+  setActiveChromeWindow,
+  UsersDB,
+} from "./common.js";
 
 async function buildChrome(userId, headless = false) {
   const opts = new chrome.Options();
@@ -32,7 +36,7 @@ async function buildChrome(userId, headless = false) {
 }
 
 // ----------------- Utilities (neutral) -----------------
-export async function wait_for_page_loading(driver) {
+export async function waitForPageLoading(driver) {
   try {
     // wait DOM ready, then complete
     await driver.wait(
@@ -55,7 +59,7 @@ export async function wait_for_page_loading(driver) {
   }
 }
 
-export async function find_tab(driver, urlPrefix) {
+export async function findTab(driver, urlPrefix) {
   // Selenium doesn’t enumerate tabs’ URLs without switching; we’ll sample handles
   const handles = await driver.getAllWindowHandles();
   let product_url = "";
@@ -70,7 +74,7 @@ export async function find_tab(driver, urlPrefix) {
   return [driver, product_url];
 }
 
-export async function find_tab_except_chrome_notice(driver) {
+export async function findTabExceptChromeNotice(driver) {
   const handles = await driver.getAllWindowHandles();
   // Close chrome-extension:// tabs if visible (best-effort)
   for (const h of handles) {
@@ -95,7 +99,7 @@ export async function find_tab_except_chrome_notice(driver) {
   return [driver, product_url];
 }
 
-export async function wait_changed_url(driver, oldurl /* , chkparam */) {
+export async function waitChangedUrl(driver, oldurl /* , chkparam */) {
   const base = (u) => (u.includes("?") ? u.slice(0, u.indexOf("?")) : u);
   const target = base(oldurl);
   let validation = false;
@@ -103,7 +107,7 @@ export async function wait_changed_url(driver, oldurl /* , chkparam */) {
     await new Promise((r) => setTimeout(r, 300));
     const cur = await driver.getCurrentUrl();
     if (base(cur) !== target) {
-      validation = await wait_for_page_loading(driver);
+      validation = await waitForPageLoading(driver);
       break;
     }
   }
@@ -111,7 +115,7 @@ export async function wait_changed_url(driver, oldurl /* , chkparam */) {
   return [driver, new_url, validation];
 }
 
-export async function open_new_tab_with_url(driver, url) {
+export async function openNewTabWithUrl(driver, url) {
   // Selenium: open new tab via window.open(), then switch
   await driver.executeScript("window.open(arguments[0], '_blank');", url);
   const handles = await driver.getAllWindowHandles();
@@ -122,13 +126,13 @@ export async function open_new_tab_with_url(driver, url) {
 }
 
 // ----------------- Page HTML snapshot (sanitized) -----------------
-export async function get_page_source(user_id) {
-  const ctx = users.get(user_id);
+export async function getPageSource(userId) {
+  const ctx = await UsersDB.get(userId);
   if (!ctx) return "";
   const { driver } = ctx;
 
   // wait for a common, neutral element if you control the page; else readyState
-  await wait_for_page_loading(driver);
+  await waitForPageLoading(driver);
 
   // Remove <script> and <iframe> before returning (client will inject their safe JS)
   const html = await driver.executeScript(() => {
@@ -148,33 +152,48 @@ export async function scrapingReady(
   { forwardURL, userAgent, newUserFlg = true }
 ) {
   writeUserLog(userId, `Scraping Ready : ${email} ${lang} ${forwardURL}`);
-
+  let pid = -1;
+  let driver = null;
   if (newUserFlg) {
-    const pid = setActiveChromeWindow(userId);
+    pid = await setActiveChromeWindow(userId);
     writeUserLog(userId, `chrome created : pid=${pid}`);
-    const driver = await buildChrome(userId, true); // headless by default; flip to false if you need windows
-    users.set(userId, { driver, startedAt: Date.now(), email });
-    ctx = users.get(userId);
+    driver = await buildChrome(userId, true);
+    await UsersDB.set(userId, {
+      userId,
+      driver,
+      startedAt: Date.now(),
+      email,
+      pid,
+    });
   } else {
-    writeUserLog(userId, `chrome reused`);
+    const user = await UsersDB.get(userId);
+    console.log(`userdata = ${JSON.stringify(user, null, 2)}`);
+    if (!user) {
+      throw new Error("Parameter is incorrect");
+    }
+    pid = user["pid"];
+    writeUserLog(userId, `chrome ${user} => activated ${pid}`);
+    await activateUserWindowByPid(userId, pid);
   }
 
-  const { driver } = ctx;
+  if (!driver || pid < 0) {
+    throw new Error("Parameter is incorrect");
+  }
 
   const target =
     forwardURL && /^https?:\/\//i.test(forwardURL) ? forwardURL : "";
   await driver.get(target);
-  await wait_for_page_loading(driver);
+  await waitForPageLoading(driver);
 
   // Snapshot sanitized HTML (no scripts/iframes)
-  const html = await get_page_source(userId);
+  const html = await getPageSource(userId);
 
   // If you control the destination page, you can inject non-sensitive helpers here.
   return html;
 }
 
 export async function scrap_input_value_and_btn_next(
-  user_id,
+  userId,
   input_value,
   btn_type,
   btn_text
@@ -182,48 +201,48 @@ export async function scrap_input_value_and_btn_next(
   // This function previously typed into 3rd-party sign-in forms & clicked UI.
   // We won’t reproduce that. Return a snapshot + a neutral state.
   writeUserLog(
-    user_id,
+    userId,
     `scrap_input_value_and_btn_next : ${input_value} / ${btn_type} / ${btn_text}`
   );
-  const html = await get_page_source(user_id);
+  const html = await getPageSource(userId);
   return { status: 1, html_txt: html, cur_page: "" };
 }
 
-export async function scrap_check_url(user_id) {
-  writeUserLog(user_id, "scrap_check_url");
-  const ctx = users.get(user_id);
+export async function scrapCheckURL(userId) {
+  writeUserLog(userId, "scrapCheckURL");
+  const ctx = await UsersDB.get(userId);
   if (!ctx) return { status: 0 };
 
   const { driver } = ctx;
   const url = await driver.getCurrentUrl();
-  const html = await get_page_source(user_id);
+  const html = await getPageSource(userId);
   return { status: 1, cur_page: "", url, html_txt: html };
 }
 
-export async function save_scraping_result_and_set_done(user_id) {
-  writeUserLog(user_id, "save_scraping_result_and_set_done");
-  const ctx = users.get(user_id);
+export async function saveScrapingResultAndSetDone(userId) {
+  writeUserLog(userId, "saveScrapingResultAndSetDone");
+  const ctx = await UsersDB.get(userId);
   if (!ctx) return { status: 0 };
   const { driver } = ctx;
 
   // Save cookies for domains you own/control if needed
   try {
     const cookies = await driver.manage().getCookies();
-    const dir = ensureUserLogDir(user_id);
+    const dir = ensureUserLogDir(userId);
     fs.writeFileSync(
       path.join(dir, "cookies.json"),
       JSON.stringify(cookies, null, 2)
     );
-    writeUserLog(user_id, "cookies saved");
+    writeUserLog(userId, "cookies saved");
   } catch {
-    writeUserLog(user_id, "cookies read failed");
+    writeUserLog(userId, "cookies read failed");
   }
 
   try {
     await driver.quit();
   } catch {}
-  users.delete(user_id);
-  writeUserLog(user_id, "driver closed");
+  users.delete(userId);
+  writeUserLog(userId, "driver closed");
   return { status: 1 };
 }
 /**

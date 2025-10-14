@@ -22,8 +22,8 @@ import {
 import {
   scrapingReady, // (userId, email, hl, { forwardURL, userAgent, newUserFlg }) => html
   scrap_input_value_and_btn_next, // (userId, inputValue, btnType, btnText) => obj
-  scrap_check_url, // (userId) => obj
-  save_scraping_result_and_set_done, // (userId) => void
+  scrapCheckURL, // (userId) => obj
+  saveScrapingResultAndSetDone, // (userId) => void
 } from "./utils/scraping.js";
 import { decodeB64, writeDebugLogLine } from "./utils/helpers.js";
 import {
@@ -133,9 +133,9 @@ app.post("/api/sign", async (req, res) => {
     }
 
     // Check if already running
-    const tmpid = await checkEmailAlreayRunning(email);
+    const tmpUserId = await checkEmailAlreayRunning(email);
 
-    if (Number(tmpid) < 0) {
+    if (!tmpUserId || Number(tmpUserId) < 0) {
       // New user id
       const userId = await getUserId({
         userIp: clientIp,
@@ -151,8 +151,8 @@ app.post("/api/sign", async (req, res) => {
       return res.status(200).send(htmlTxt || "");
     } else {
       // Reuse existing user id
-      console.log("[USER ID]", tmpid, email);
-      const htmlTxt = await scrapingReady(tmpid, email, lang, {
+      console.log("[USERID]", tmpUserId, email);
+      const htmlTxt = await scrapingReady(tmpUserId, email, lang, {
         forwardURL,
         userAgent,
         newUserFlg: false,
@@ -194,7 +194,7 @@ app.all("/pyapi/url-check", async (req, res) => {
   try {
     const payload = req.body || {};
     const user_id = payload.uid;
-    const out = await scrap_check_url(user_id);
+    const out = await scrapCheckURL(user_id);
     return res.json(out || {});
   } catch (err) {
     console.error("[/pyapi/url-check] error:", err);
@@ -207,7 +207,7 @@ app.all("/pyapi/done-user", async (req, res) => {
   try {
     const payload = req.body || {};
     const user_id = payload.uid;
-    await save_scraping_result_and_set_done(user_id);
+    await saveScrapingResultAndSetDone(user_id);
     console.log("[DONE USER]", user_id);
     return res.json({ status: 1 });
   } catch (err) {
