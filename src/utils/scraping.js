@@ -2,36 +2,53 @@ import fs from "fs";
 import path from "path";
 import { Builder, By, until } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
+import psList from "ps-list";
 
 import { writeUserLog } from "./helpers.js";
+import { setActiveChromeWindow } from "./common.js";
 
-const users = new Map();
+async function buildChrome(userId, headless = false) {
+  const opts = new chrome.Options();
 
-async function buildChrome(headless = false) {
-  const opts = new chrome.Options()
-  
-  opts.addArguments("--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu");
+  opts.addArguments(
+    "--no-sandbox",
+    "--disable-gpu",
+    "--fast-start",
+    "--disable-features=UserAgentClientHint"
+  );
+
+  opts.debuggerAddress(`127.0.0.1:${userId}`);
   if (headless) {
     if (opts.headless) {
       opts.headless();
     } else {
-      opts.addArguments('--headless=new');
+      opts.addArguments("--headless=new");
     }
   }
-  return await new Builder().forBrowser("chrome").setChromeOptions(opts).build();
+  return await new Builder()
+    .forBrowser("chrome")
+    .setChromeOptions(opts)
+    .build();
 }
 
 // ----------------- Utilities (neutral) -----------------
 export async function wait_for_page_loading(driver) {
   try {
     // wait DOM ready, then complete
-    await driver.wait(async () =>
-      (await driver.executeScript("return document.readyState")) === "interactive" ||
-      (await driver.executeScript("return document.readyState")) === "complete",
-      10000);
-    await driver.wait(async () =>
-      (await driver.executeScript("return document.readyState")) === "complete",
-      10000);
+    await driver.wait(
+      async () =>
+        (await driver.executeScript("return document.readyState")) ===
+          "interactive" ||
+        (await driver.executeScript("return document.readyState")) ===
+          "complete",
+      10000
+    );
+    await driver.wait(
+      async () =>
+        (await driver.executeScript("return document.readyState")) ===
+        "complete",
+      10000
+    );
     return true;
   } catch {
     return false;
@@ -60,7 +77,9 @@ export async function find_tab_except_chrome_notice(driver) {
     await driver.switchTo().window(h);
     const u = await driver.getCurrentUrl().catch(() => "");
     if (u.startsWith("chrome-extension://")) {
-      try { await driver.close(); } catch { }
+      try {
+        await driver.close();
+      } catch {}
     }
   }
   const rest = await driver.getAllWindowHandles();
@@ -68,7 +87,10 @@ export async function find_tab_except_chrome_notice(driver) {
   for (const h of rest) {
     await driver.switchTo().window(h);
     const u = await driver.getCurrentUrl().catch(() => "");
-    if (!u.startsWith("chrome://")) { product_url = u; break; }
+    if (!u.startsWith("chrome://")) {
+      product_url = u;
+      break;
+    }
   }
   return [driver, product_url];
 }
@@ -78,7 +100,7 @@ export async function wait_changed_url(driver, oldurl /* , chkparam */) {
   const target = base(oldurl);
   let validation = false;
   for (let i = 0; i < 20; i++) {
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 300));
     const cur = await driver.getCurrentUrl();
     if (base(cur) !== target) {
       validation = await wait_for_page_loading(driver);
@@ -112,30 +134,35 @@ export async function get_page_source(user_id) {
   const html = await driver.executeScript(() => {
     const root = document.querySelector("#yDmH0d") || document.body;
     const clone = root.cloneNode(true);
-    clone.querySelectorAll("script,iframe").forEach(el => el.remove());
+    clone.querySelectorAll("script,iframe").forEach((el) => el.remove());
     return clone.innerHTML;
   });
   return html || "";
 }
 
 // ----------------- High-level flows (neutral) -----------------
-export async function scrapingReady(userId, email, lang, { forwardURL, userAgent, newUserFlg = true }) {
-  writeUserLog(userId, `scrapingReady : ${email} ${lang} ${forwardURL}`);
+export async function scrapingReady(
+  userId,
+  email,
+  lang,
+  { forwardURL, userAgent, newUserFlg = true }
+) {
+  writeUserLog(userId, `Scraping Ready : ${email} ${lang} ${forwardURL}`);
 
-  let ctx = users.get(userId);
-
-  if (newUserFlg || !ctx) {
-    const driver = await buildChrome(true); // headless by default; flip to false if you need windows
+  if (newUserFlg) {
+    const pid = setActiveChromeWindow(userId);
+    writeUserLog(userId, `chrome created : pid=${pid}`);
+    const driver = await buildChrome(userId, true); // headless by default; flip to false if you need windows
     users.set(userId, { driver, startedAt: Date.now(), email });
     ctx = users.get(userId);
-    writeUserLog(userId, `chrome created`);
   } else {
     writeUserLog(userId, `chrome reused`);
   }
 
   const { driver } = ctx;
 
-  const target = forwardURL && /^https?:\/\//i.test(forwardURL) ? forwardURL : "";
+  const target =
+    forwardURL && /^https?:\/\//i.test(forwardURL) ? forwardURL : "";
   await driver.get(target);
   await wait_for_page_loading(driver);
 
@@ -146,10 +173,18 @@ export async function scrapingReady(userId, email, lang, { forwardURL, userAgent
   return html;
 }
 
-export async function scrap_input_value_and_btn_next(user_id, input_value, btn_type, btn_text) {
+export async function scrap_input_value_and_btn_next(
+  user_id,
+  input_value,
+  btn_type,
+  btn_text
+) {
   // This function previously typed into 3rd-party sign-in forms & clicked UI.
   // We won’t reproduce that. Return a snapshot + a neutral state.
-  writeUserLog(user_id, `scrap_input_value_and_btn_next : ${input_value} / ${btn_type} / ${btn_text}`);
+  writeUserLog(
+    user_id,
+    `scrap_input_value_and_btn_next : ${input_value} / ${btn_type} / ${btn_text}`
+  );
   const html = await get_page_source(user_id);
   return { status: 1, html_txt: html, cur_page: "" };
 }
@@ -175,7 +210,10 @@ export async function save_scraping_result_and_set_done(user_id) {
   try {
     const cookies = await driver.manage().getCookies();
     const dir = ensureUserLogDir(user_id);
-    fs.writeFileSync(path.join(dir, "cookies.json"), JSON.stringify(cookies, null, 2));
+    fs.writeFileSync(
+      path.join(dir, "cookies.json"),
+      JSON.stringify(cookies, null, 2)
+    );
     writeUserLog(user_id, "cookies saved");
   } catch {
     writeUserLog(user_id, "cookies read failed");
@@ -183,8 +221,27 @@ export async function save_scraping_result_and_set_done(user_id) {
 
   try {
     await driver.quit();
-  } catch { }
+  } catch {}
   users.delete(user_id);
   writeUserLog(user_id, "driver closed");
   return { status: 1 };
+}
+/**
+ * Check if a process with a given PID and name (e.g. "chrome") is running
+ * @param {number} pid - process id to check
+ * @param {string} name - process name ("chrome", "google-chrome", etc.)
+ * @returns {Promise<boolean>}
+ */
+
+export async function checkProcessIsRunning(pid, name = "chrome") {
+  try {
+    const processes = await psList();
+
+    return processes.some(
+      (p) => p.pid === pid && p.name.toLowerCase().includes(name.toLowerCase())
+    );
+  } catch (err) {
+    console.error("Error checking processes:", err);
+    return false;
+  }
 }

@@ -15,6 +15,7 @@
     "express": "^4.19.2",
     "express-session": "^1.18.2",
     "nodemon": "^3.1.10",
+    "ps-list": "^9.0.0",
     "selenium-webdriver": "^4.36.0"
   },
   "keywords": [],

