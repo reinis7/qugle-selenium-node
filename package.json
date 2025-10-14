@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node app.js",
-    "dev": "nodemon"
+    "dev": "nodemon",
+    "cleanup": "bash cleanup.sh"
   },
   "dependencies": {
     "axios": "^1.12.2",

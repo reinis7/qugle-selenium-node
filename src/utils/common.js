@@ -330,7 +330,7 @@ export async function setActiveChromeWindow(
 // ---- Tunables (match your Python constants) ----
 const MAX_ONE_VIEW_CNT = 6;   // adjust as needed
 const PIX_STEP        = 30;   // adjust as needed
-const WND_W           = 1920; // desired window width
+const WND_W           = 1440; // desired window width
 const WND_H           = 1080;  // desired window height
 
 async function getScreenSize() {
@@ -384,8 +384,10 @@ async function moveAndResize(winId, x, y, w, h) {
 export async function activateUserWindowByPid(user_id, pid) {
   const { screen_w, screen_h } = await getScreenSize();
 
-  const init_x = screen_w - WND_W - ((user_id - 9300) % MAX_ONE_VIEW_CNT) * PIX_STEP;
-  const init_y = screen_h - WND_H - ((user_id - 9300) % MAX_ONE_VIEW_CNT) * PIX_STEP;
+  // const init_x = screen_w - WND_W - ((user_id - 9200) % MAX_ONE_VIEW_CNT) * PIX_STEP;
+  // const init_y = screen_h - WND_H - ((user_id - 9200) % MAX_ONE_VIEW_CNT) * PIX_STEP;
+  const init_x = 0;
+  const init_y = 0;
 
   const winIds = await listWindowsByPid(pid);
   if (!winIds.length) return false;

