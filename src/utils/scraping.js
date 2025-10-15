@@ -452,7 +452,7 @@ export async function scrapInputValueAndBtnNext(
     for (let i = 0; i < buttons.length; i++) {
       try {
         const mBtnText = await buttons[i].getText();
-        
+
         console.log("[findElements]", btnText, mBtnText);
         if (mBtnText == btnText) {
           await buttons[i].click();
@@ -478,16 +478,15 @@ export async function scrapInputValueAndBtnNext(
     for (const element of elements) {
       const className = await element.getAttribute("class");
       console.log("[className]", className);
-      // if (className.find("aZvCDf cd29Sd zpCp3 SmR8") < 0) continue;
-      // if (element.text.find(btnText) >= 0) {
-      //   await element.click();
-      //   writeUserLog(
-      //     userId,
-      //     `try-another-way-item has been clicked. ${btnText}`
-      //   );
-      //   break;
-      // }
-      throw new Error("Comming Soon");
+      if (className.findIndex("aZvCDf cd29Sd zpCp3 SmR8") < 0) continue;
+      const eleText = element.getText();
+      if (eleText.findIndex(btnText) >= 0) {
+        await element.click();
+        writeUserLog(
+          userId,
+          `Try-another-way-item has been clicked. ${btnText}`
+        );
+      }
     }
   }
 

@@ -34,7 +34,6 @@ export async function createJSONDatabase(filename) {
   }
 
   async function get(key) {
-    console.log("DB[get]", data, key, data[key]);
     return data[key];
   }
 
