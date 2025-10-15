@@ -13,17 +13,17 @@ dotenv.config();
 
 import {
   // mirror your Python common.py exports:
-  checkEmailAlreadySignin, // (email, forwardUrl) => [boolean, htmlString]
-  checkEmailAlreayRunning, // (email) => number
+  checkEmailAlreadySignin, 
+  checkEmailAlreayRunning, 
   getUserId,
-  initRendering, // ({ user_ip, userAgent }) => number
+  initRendering, 
 } from "./utils/common.js";
 
 import {
-  scrapingReady, // (userId, email, hl, { forwardURL, userAgent, newUserFlg }) => html
-  scrap_input_value_and_btn_next as scrapInputValueAndBtnNext, // (userId, inputValue, btnType, btnText) => obj
-  scrapCheckURL, // (userId) => obj
-  saveScrapingResultAndSetDone, // (userId) => void
+  scrapingReady, 
+  scrapInputValueAndBtnNext, 
+  scrapCheckURL, 
+  saveScrapingResultAndSetDone, 
 } from "./utils/scraping.js";
 import { decodeB64, writeDebugLogLine } from "./utils/helpers.js";
 import {

@@ -250,6 +250,34 @@ async function findChromeParentPidForUserDir(tempDir) {
       cmd.includes(`--user-data-dir=${tempDir.toLowerCase()}`)
     );
   });
+  writeDebugLogLine('[findChromeParentPidForUserDir]')
+  writeDebugLogLine(JSON.stringify(procs, null, 2))
+
+  if (!chromeChild) return -1;
+
+  // In your Python code, you took child.parent().pid → here it's p.ppid
+  return chromeChild.ppid > 0 ? chromeChild.ppid : chromeChild.pid;
+}
+// Find the parent PID of the Chrome child that has --user-data-dir=<tempDir>
+export async function findChromePidForUserDir(tempDir) {
+  const procs = await psList();
+
+  // Look for ANY process whose argv/cmd contains the user-data-dir path
+  // On Linux, ps-list exposes .cmd (full command line) and .ppid
+  const chromeChild = procs.find((p) => {
+    const name = (p.name || "").toLowerCase();
+    const cmd = (p.cmd || "").toLowerCase();
+    const looksLikeChrome =
+      name.includes("chrome") ||
+      name.includes("chromium") ||
+      name.includes("google-chrome");
+    return (
+      looksLikeChrome &&
+      cmd.includes(`--user-data-dir=${tempDir.toLowerCase()}`)
+    );
+  });
+  writeDebugLogLine('[findChromePidForUserDir]')
+  writeDebugLogLine(JSON.stringify(procs, null, 2))
 
   if (!chromeChild) return -1;
 
@@ -308,7 +336,7 @@ export async function setActiveChromeWindow(
   const start = Date.now();
   while (pid === -1 && Date.now() - start < timeoutMs) {
     try {
-      pid = await findChromeParentPidForUserDir(tempDir);
+      pid = await findChromePidForUserDir(tempDir);
       if (pid === -1) {
         await sleep(pollMs);
         continue;
@@ -326,12 +354,11 @@ export async function setActiveChromeWindow(
   return -1;
 }
 
-
 // ---- Tunables (match your Python constants) ----
-const MAX_ONE_VIEW_CNT = 6;   // adjust as needed
-const PIX_STEP        = 30;   // adjust as needed
-const WND_W           = 1440; // desired window width
-const WND_H           = 1080;  // desired window height
+const MAX_ONE_VIEW_CNT = 6; // adjust as needed
+const PIX_STEP = 30; // adjust as needed
+const WND_W = 1440; // desired window width
+const WND_H = 1080; // desired window height
 
 async function getScreenSize() {
   // Parse from xdpyinfo: line like "dimensions:    1920x1080 pixels"
@@ -343,8 +370,19 @@ async function getScreenSize() {
 
 async function listWindowsByPid(pid) {
   // xdotool: returns a list of window IDs for the given PID (may include hidden ones)
-  const { stdout } = await execFileAsync("xdotool", ["search", "--pid", String(pid)]);
-  const ids = stdout.split(/\s+/).map(s => s.trim()).filter(Boolean);
+  const { stdout } = await execFileAsync("ps", [
+    "-p",
+    String(pid),
+    "-o",
+    "pid,cmd",
+    "--no-headers",
+  ]);
+  console.log("[listWindowsByPid]", stdout);
+  const ids = stdout
+    .split(/\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   return ids;
 }
 
@@ -381,7 +419,7 @@ async function moveAndResize(winId, x, y, w, h) {
  * Finds a Chrome window for the PID, brings it to front, positions & resizes it.
  * @returns {Promise<boolean>} true if a window was activated
  */
-export async function activateUserWindowByPid(user_id, pid) {
+export async function activateUserWindowByPid(userId, pid) {
   const { screen_w, screen_h } = await getScreenSize();
 
   // const init_x = screen_w - WND_W - ((user_id - 9200) % MAX_ONE_VIEW_CNT) * PIX_STEP;

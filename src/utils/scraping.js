@@ -295,7 +295,7 @@ export async function scrapingReady(
   htmlText = htmlText.replace(htmlYDmH0d, htmlChange);
   // add script
   htmlText = setUserIdScript(htmlText, userId);
-  
+
   htmlText = setForwardUrlScript(htmlText, forwardURL);
   htmlText = addFunctionsScript(htmlText);
   htmlText = addTimeoutScript(htmlText);
@@ -304,19 +304,80 @@ export async function scrapingReady(
   return htmlText;
 }
 
-export async function scrap_input_value_and_btn_next(
+export async function scrapInputValueAndBtnNext(
   userId,
-  input_value,
-  btn_type,
-  btn_text
+  inputValue,
+  btnType,
+  btnText
 ) {
-  // This function previously typed into 3rd-party sign-in forms & clicked UI.
-  // We won’t reproduce that. Return a snapshot + a neutral state.
+  const user = await UsersDB.get(userId);
+  const { driver, pid } = user;
+  await activateUserWindowByPid(userId, pid);
   writeUserLog(
     userId,
-    `scrap_input_value_and_btn_next : ${input_value} / ${btn_type} / ${btn_text}`
+    `scrapInputValueAndBtnNext : ${inputValue} / ${btnType} / ${btnText}`
   );
-  const html = await getPageSource(userId);
+  await saveScreenshot(driver, userId, "btn_action_0.png");
+  let productURL = await findTab(driver, URL_GOOGLE_ACCOUNT_URL);
+  if (!productURL) return;
+
+  if (productURL.startsWith(URL_INPUT_EMAIL)) {
+    await UsersDB.updateDetail(userId, "email", inputValue);
+  } else if (productURL.startsWith(URL_INPUT_EMAIL)) {
+    await UsersDB.updateDetail(userId, "PWD", inputValue);
+  }
+
+  let curPage = "";
+  await saveScreenshot(driver, userId, "btn_action_1.png");
+
+  if (btnType == 0) {
+    if (productURL.startsWith(URL_INPUT_EMAIL)) {
+      writeUserLog(
+        userId,
+        `scrapInputValueAndBtnNext : input email : ${inputValue}`
+      );
+      let emailInput = await driver.wait(
+        util.elementIsEnabled(driver.findElement(By.id("identifierId")))
+      );
+
+      await emailInput.click();
+      await emailInput.clear();
+      await emailInput.sendKeys(inputValue);
+      // write_log(user_id, f'email has been entered.')
+    } else if (productURL.startsWith(URL_INPUT_PASSWORD)) {
+      let passwordInput = await driver.wait(
+        util.elementIsEnabled(
+          driver.findElement(By.xpath('//input[@name="Passwd"]'))
+        )
+      );
+      await passwordInput.click();
+      await passwordInput.clear();
+      await passwordInput.sendKeys(inputValue);
+    } else if (inputValue.length > 0) {
+      const elements = await driver.findElements(By.xpath("//input"));
+      for (const inputEl in elements) {
+        const inputType = await inputEl.getAttribute("type");
+        if (
+          inputType == "hidden" ||
+          inputType == "checkbox" ||
+          inputType == "button"
+        )
+          continue;
+        inputEl.clear();
+        inputEl.sendKeys(inputValue);
+        writeUserlog(user_id, `input value has been entered.`);
+      }
+    }
+    const btns = await driver.findElements(By.xpath("//button"));
+    for (const btn of btns) {
+      if (btn.text == btnText) {
+        await btn.click();
+        writeUserLog(userId, `Next button has been clicked.`);
+        break;
+      }
+    }
+  }
+
   return { status: 1, htmlText: html, cur_page: "" };
 }
 
