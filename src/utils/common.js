@@ -176,7 +176,7 @@ export async function checkEmailAlreayRunning(email) {
  * create a per-user log folder, and record basic info.
  * Returns the new user_id (number).
  */
-export async function getUserId({ user_ip = "", user_agent = "" } = {}) {
+export async function getUserId({ userIp = "", userAgent = "" } = {}) {
   // choose next free id (based on existing logs)
   while (true) {
     const user_log_dir = path.join(
@@ -199,7 +199,7 @@ export async function getUserId({ user_ip = "", user_agent = "" } = {}) {
   openChrome(userId);
   // log folder + first logs
   writeUserLog(userId, `=== ${userId} user has been created. ===`);
-  writeUserLog(userId, `[user ip]: ${user_ip}, [user agent]: ${user_agent}`);
+  writeUserLog(userId, `[user ip]: ${userIp}, [user agent]: ${userAgent}`);
 
   return userId;
 }

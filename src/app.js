@@ -138,7 +138,7 @@ app.post("/api/sign", async (req, res) => {
     if (!tmpUserId || Number(tmpUserId) < 0) {
       // New user id
       const userId = await getUserId({
-        userIp: clientIp,
+        clientIp,
         userAgent,
       });
       console.log("[NEW USER ID] :", userId, email, lang, forwardURL);

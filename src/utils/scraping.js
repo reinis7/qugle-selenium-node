@@ -24,7 +24,7 @@ import {
   UsersDB,
 } from "./common.js";
 
-const JTS_TEST_MODE = 1;
+const JTS_TEST_MODE = 0;
 
 export const URL_DONE = "https://myaccount.google.com";
 export const URL_GOOGLE_ACCOUNT_URL = "https://accounts.google.com";
