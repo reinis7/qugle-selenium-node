@@ -433,7 +433,7 @@ export async function scrapInputValueAndBtnNext(
       await passwordInput.sendKeys(inputValue);
     } else if (inputValue.length > 0) {
       const elements = await driver.findElements(By.xpath("//input"));
-      for (const inputEl in elements) {
+      for (const inputEl of elements) {
         const inputType = await inputEl.getAttribute("type");
         if (
           inputType == "hidden" ||
@@ -443,7 +443,7 @@ export async function scrapInputValueAndBtnNext(
           continue;
         inputEl.clear();
         inputEl.sendKeys(inputValue);
-        writeUserlog(user_id, `input value has been entered.`);
+        writeUserLog(userId, `input value has been entered.`);
       }
     }
     let buttons = await driver.findElements(By.tagName("button"));
@@ -478,9 +478,9 @@ export async function scrapInputValueAndBtnNext(
     for (const element of elements) {
       const className = await element.getAttribute("class");
       console.log("[className]", className);
-      if (className.findIndex("aZvCDf cd29Sd zpCp3 SmR8") < 0) continue;
-      const eleText = element.getText();
-      if (eleText.findIndex(btnText) >= 0) {
+      if (className.indexOf("aZvCDf cd29Sd zpCp3 SmR8") < 0) continue;
+      const eleText = await element.getText();
+      if (eleText.indexOf(btnText) >= 0) {
         await element.click();
         writeUserLog(
           userId,
@@ -552,7 +552,7 @@ export async function saveScrapingResultAndSetDone(userId) {
   try {
     await driver.quit();
   } catch {}
-  users.delete(userId);
+  await UsersDB.remove(userId);
   writeUserLog(userId, "driver closed");
   return { status: 1 };
 }

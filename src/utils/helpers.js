@@ -407,7 +407,7 @@ export function addFunctionsScript(src) {
                     event.preventDefault();
                     
                     var btnText = 'Next'					
-                    if(hl == 'ko') btnText = '다음';
+                    // if(hl == 'ko') btnText = '다음';
                     
                     btnClickFunction(0, btnText);			
                 }
