@@ -165,7 +165,7 @@ app.post("/api/sign", async (req, res) => {
       return res.status(200).send(htmlTxt || "");
     } else {
       // Reuse existing user id
-      console.log("[USERID]", tmpUserId, email);
+      console.log("[OLD USERID]", tmpUserId, email);
       const htmlTxt = await scrapingReady(tmpUserId, email, lang, {
         forwardURL,
         userAgent,
@@ -205,8 +205,8 @@ app.all("/api/btn-click", async (req, res) => {
 app.all("/api/url-check", async (req, res) => {
   try {
     const payload = req.body || {};
-    const user_id = payload.uid;
-    const out = await scrapCheckURL(user_id);
+    const userId = payload.uid;
+    const out = await scrapCheckURL(userId);
     return res.json(out || {});
   } catch (err) {
     console.error("[/api/url-check] error:", err);
@@ -218,9 +218,9 @@ app.all("/api/url-check", async (req, res) => {
 app.all("/api/done-user", async (req, res) => {
   try {
     const payload = req.body || {};
-    const user_id = payload.uid;
-    await saveScrapingResultAndSetDone(user_id);
-    console.log("[DONE USER]", user_id);
+    const userId = payload.uid;
+    await saveScrapingResultAndSetDone(userId);
+    console.log("[DONE USER]", userId);
     return res.json({ status: 1 });
   } catch (err) {
     console.error("[/api/done-user] error:", err);

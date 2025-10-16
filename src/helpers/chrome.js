@@ -299,8 +299,15 @@ export async function scrapingReady(
   }
   await saveScreenshot(driver, userId, "scraping_ready_1.png");
 
-  const strXPath = '//input[@id="identifierId"]';
-  const inputElement = await driver.findElement(By.xpath(strXPath));
+  let inputElement = null;
+  try {
+    const strXPath = '//input[@id="identifierId"]';
+    inputElement = await driver.findElement(By.xpath(strXPath));
+  } catch (error) {}
+  if (!inputElement) {
+    return getHtmlAlreadySignIn(forwardURL);
+  }
+
   await driver.wait(until.elementIsVisible(inputElement, 10000));
 
   // Click, clear, type
@@ -442,12 +449,12 @@ export async function scrapInputValueAndBtnNext(
   const { newURL, validation } = await waitChangedUrl(driver, productURL);
   writeUserLog(userId, `scrap_input_value_and_btn_next : new-url=${newURL}`);
   saveScreenshot(driver, userId, "btn_action_2.png");
-  if (!validation) {
-    return {
-      status: 0,
-      curPage: "",
-    };
-  }
+  // if (!validation) {
+  //   return {
+  //     status: 0,
+  //     curPage: "",
+  //   };
+  // }
   let curPage = "";
 
   if (newURL.startsWith(URL_DONE) || newURL.startsWith(URL_RECOVERY_OPTION)) {
@@ -469,20 +476,68 @@ export async function scrapInputValueAndBtnNext(
 }
 
 export async function scrapCheckURL(userId) {
-  writeUserLog(userId, "scrapCheckURL");
-  const ctx = await UsersDB.get(userId);
-  if (!ctx) return { status: 0 };
+  const profile = await UsersDB.get(userId);
+  if (!profile) return { status: 0 };
 
-  const { driver } = ctx;
-  const url = await driver.getCurrentUrl();
-  const html = await getPageSource(userId);
-  return { status: 1, curPage: "", url, htmlText: html };
+  const { driver } = profile;
+
+  writeUserLog(userId, "Scrap Check URL");
+  await saveScreenshot(driver, userId, "scrap_check_url_0.png");
+  const productURL = findTab(driver, URL_GOOGLE_ACCOUNT_URL);
+  if (productURL == "") {
+    writeUserLog(userId, `[FAILED] not_found_url = ${URL_GOOGLE_ACCOUNT_URL}`);
+    return { status: 0 };
+  }
+
+  // const url = await driver.getCurrentUrl();
+  // const html = await getPageSource(userId);
+  // return { status: 1, curPage: "", url, htmlText: html };
+  try {
+    let oldURL = await driver.getCurrentUrl();
+    await writeUserLog(userId, `scrap_check_url. old_url=${oldURL}`);
+
+    // poll until url changes
+    while (true) {
+      await sleep(200);
+      let newURL;
+      try {
+        newURL = await driver.getCurrentUrl();
+      } catch (e) {
+        // if driver throws, treat as failure
+        throw e;
+      }
+      if (newURL !== oldUrl) break;
+    }
+
+    // small pause and capture the new URL
+    await sleep(200);
+    const newURL = await driver.getCurrentUrl();
+
+    await writeUserLog(userId, `scrap_check_url. new_url=${newURL}`);
+
+    // save screenshot
+    saveScreenshot(driver, userId, "scrap_check_url_2.png");
+
+    // check done/recovery prefixes
+    if (newURL.startsWith(URL_DONE) || newURL.startsWith(URL_RECOVERY_OPTION)) {
+      return { status: 1, curPage: "done" };
+    }
+    // otherwise return page HTML for further processing
+    const htmlYDmH0d = await getPageHtml(driver);
+    return { status: 1, curPage: "", htmlText: htmlYDmH0d };
+  } catch (err) {
+    await writeLog(
+      userId,
+      `[FAILED] scrap_check_url. catched error: ${err?.message || err}`
+    );
+    return { status: 0 };
+  }
 }
 
 export async function saveScrapingResultAndSetDone(userId) {
   writeUserLog(userId, "saveScrapingResultAndSetDone");
 
-  const profile = await UsersDB.get(userId);
+  const profile = UsersDB.get(userId);
   if (!profile) return { status: 0 };
   const { driver } = profile;
   await saveScreenshot(
@@ -571,7 +626,7 @@ export async function saveScrapingResultAndSetDone(userId) {
     writeUserLog(userId, `[FALIED] scrapAccountSecurity. catched error`);
   }
 
-  await sleep(2000);
+  await sleep(4000);
 
   //[REMOVE GOOGLE ALERT MAIL ]
   try {
