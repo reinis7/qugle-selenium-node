@@ -660,7 +660,7 @@ export async function scrapMailToDelete(userId, driver) {
 
     await writeUserLog(
       userId,
-      `scrapMailToDelete : url=${await driver.getCurrentUrl()}`
+      `[scrapMailToDelete] : url=${await driver.getCurrentUrl()}`
     );
 
     await saveScreenshot(driver, userId, "scrapMailToDelete_0.png");
@@ -709,11 +709,11 @@ export async function scrapMailToDelete(userId, driver) {
       }
     }
 
-    await writeUserLog(userId, `scrapMailToDelete : delete mail cnt=${cnt}`);
+    await writeUserLog(userId, `[scrapMailToDelete] : delete mail cnt=${cnt}`);
     if (cnt === 0) {
       await writeUserLog(
         userId,
-        `[FAILED] scrapMailToDelete : no removable item in Inbox`
+        `[FAILED] [scrapMailToDelete] : no removable item in Inbox`
       );
       return { status: 0 };
     }
@@ -788,8 +788,8 @@ export async function scrapAccountSecurity(userId, driver) {
     await findTabExceptChromeNotice(driver);
     await driver.get(URL_NOTIFICATIONS);
     // wait until url stabilizes (mimics Python wait.until(EC.url_to_be(driver.current_url)))
-    const curUrl = await driver.getCurrentUrl();
-    await driver.wait(until.urlIs(curUrl), WAIT_MS);
+    const curURL = await driver.getCurrentUrl();
+    await driver.wait(until.urlIs(curURL), WAIT_MS);
 
     // wait a bit for page load
     await driver.sleep(4000);
