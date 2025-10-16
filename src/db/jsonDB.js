@@ -18,24 +18,31 @@ export function createJSONDatabase(filename) {
       const fileContent = fs.readFileSync(filepath, "utf8");
       data = JSON.parse(fileContent);
     } catch (e) {
-      console.error(`[createJSONDatabase] ${e.message}`)
+      console.error(`[createJSONDatabase] ${e.message}`);
       data = {};
       save();
     }
   }
 
   async function save() {
-    await fsPromise.writeFile(
-      filepath,
-      JSON.stringify(
-        data,
-        (key, value) => {
-          if (key == "driver") return undefined;
-          return value;
-        },
-        2
-      )
-    );
+    try {
+      await fsPromise.writeFile(
+        filepath,
+        JSON.stringify(
+          data,
+          (key, value) => {
+            if (key == "driver") return "";
+            return value;
+          },
+          2
+        )
+      );
+    } catch (e) {
+      console.error(`[error]`)
+      console.error(data)
+      console.error(e)
+      
+    }
   }
 
   async function set(key, value) {
