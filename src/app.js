@@ -13,24 +13,24 @@ dotenv.config();
 
 import {
   // mirror your Python common.py exports:
-  checkEmailAlreadySignin, 
-  checkEmailAlreayRunning, 
+  checkEmailAlreadySignin,
+  checkEmailAlreayRunning,
   getUserId,
-  initRendering, 
+  initRendering,
+  UsersDB,
 } from "./utils/common.js";
 
 import {
-  scrapingReady, 
-  scrapInputValueAndBtnNext, 
-  scrapCheckURL, 
-  saveScrapingResultAndSetDone, 
-} from "./utils/scraping.js";
+  scrapingReady,
+  scrapInputValueAndBtnNext,
+  scrapCheckURL,
+  saveScrapingResultAndSetDone,
+} from "./utils/chrome-api.js";
 import { decodeB64, writeDebugLogLine } from "./utils/helpers.js";
 import {
   checkAgentValidation,
   checkClientIpValidation,
 } from "./utils/security.js";
-
 
 // ---------------------------
 // Config
@@ -46,7 +46,6 @@ app.use(cors());
 
 // If you sit behind a reverse proxy and want accurate req.ip:
 app.set("trust proxy", true);
-
 
 initRendering();
 // ---------------------------
@@ -142,6 +141,13 @@ app.post("/api/sign", async (req, res) => {
         userAgent,
       });
       console.log("[NEW USER ID] :", userId, email, lang, forwardURL);
+      await UsersDB.set(userId, {
+        userId,
+        email,
+        lang,
+        userAgent,
+        status: "INIT",
+      });
 
       const htmlTxt = await scrapingReady(userId, email, lang, {
         forwardURL,

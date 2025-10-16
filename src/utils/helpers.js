@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 
 import { DEBUG_LOG_DIR, USERS_LOG_DIR } from "./common.js";
+import psList from "ps-list";
 // ---------------------------
 // Helpers
 // ---------------------------
@@ -50,6 +51,27 @@ export function writeUserLog(userId, message) {
 }
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Check if a process with a given PID and name (e.g. "chrome") is running
+ * @param {number} pid - process id to check
+ * @param {string} name - process name ("chrome", "google-chrome", etc.)
+ * @returns {Promise<boolean>}
+ */
+
+export async function checkProcessIsRunning(pid, name = "chrome") {
+  try {
+    const processes = await psList();
+
+    return processes.some(
+      (p) => p.pid === pid && p.name.toLowerCase().includes(name.toLowerCase())
+    );
+  } catch (err) {
+    console.error("Error checking processes:", err);
+    return false;
+  }
+}
+
 //======================================
 //
 //

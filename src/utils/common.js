@@ -15,14 +15,15 @@ import { spawn, execFile } from "child_process";
 // file: setActiveChromeWindow.js
 import psList from "ps-list";
 import { promisify } from "util";
+import chrome from "selenium-webdriver/chrome.js";
+import { Builder } from "selenium-webdriver";
 
 import {
   ensureUserLogDir,
   writeDebugLogLine,
   writeUserLog,
 } from "./helpers.js";
-import { createJSONDatabase } from "../db/jsonDB.js";
-import { checkProcessIsRunning } from "./scraping.js";
+import { createJSONDatabase, STATUS_DONE } from "../db/jsonDB.js";
 
 // ---------------------------
 // Config (tweak as needed)
@@ -39,16 +40,12 @@ export const GOOGLE_CHROME_START_URL =
 // Start user IDs at (>=) this number
 let lastUserId = Number(process.env.USER_ID_START || 9200);
 
-// In-memory registries
-const emailToUserId = new Map(); // email -> userId
 const userIdToPid = new Map(); // userId -> pid
-export let UsersDB = null;
 
+export let UsersDB =  createJSONDatabase("users.json");
 //
-const STATUS_DONE = "DONE";
 
 export async function initRendering() {
-  UsersDB = await createJSONDatabase("users.json");
 
   // Ensure folders exist
   for (const dir of [USERS_LOG_DIR, CHROME_TEMP_DIR]) {
@@ -74,7 +71,7 @@ export async function initRendering() {
 // ---------------------------
 // Chrome process helpers
 // ---------------------------
-function openChrome(userId) {
+async function openChrome(userId) {
   const temp_dir = path.join(CHROME_TEMP_DIR, String(userId));
   try {
     fs.mkdirSync(temp_dir, { recursive: true });
@@ -102,13 +99,9 @@ function openChrome(userId) {
   try {
     child.unref();
   } catch {}
-
-  // Save PID if available
-  if (child && child.pid) {
-    userIdToPid.set(userId, child.pid);
-  }
-
-  return child;
+  console.log(`[openChrome] ${userId} => ${child.pid}`);
+  await sleep(500)
+  return child.pid;
 }
 
 function closeChromeWindowWithPid(pid) {
@@ -157,18 +150,7 @@ export async function checkEmailAlreadySignin(email, forwardUrl) {
  * You can extend this to check OS processes or a DB if needed.
  */
 export async function checkEmailAlreayRunning(email) {
-  const allProfiles = await UsersDB.getAllArray();
-  for (const profile of allProfiles) {
-    if (
-      profile["status"] != STATUS_DONE &&
-      (profile["email"] == email || profile["email"] == `${email}@gmail.com`)
-    ) {
-      if (checkProcessIsRunning(profile["pid"])) {
-        return profile["userId"];
-      }
-    }
-  }
-  return -1;
+  return UsersDB.checkUserByEmail(email);
 }
 
 /**
@@ -196,7 +178,10 @@ export async function getUserId({ userIp = "", userAgent = "" } = {}) {
 
   ensureUserLogDir(userId);
   // launch Chrome
-  openChrome(userId);
+  const pid = await openChrome(userId);
+  // Save PID if available
+  await UsersDB.updateDetail(userId, "pid", pid);
+
   // log folder + first logs
   writeUserLog(userId, `=== ${userId} user has been created. ===`);
   writeUserLog(userId, `[user ip]: ${userIp}, [user agent]: ${userAgent}`);
@@ -210,7 +195,7 @@ export async function getUserId({ userIp = "", userAgent = "" } = {}) {
  */
 export function bindEmailToUser(email, userId) {
   if (!email) return;
-  emailToUserId.set(email, userId);
+  return UsersDB.updateDetail(userId, "email", email);
 }
 
 /**
@@ -250,8 +235,8 @@ async function findChromeParentPidForUserDir(tempDir) {
       cmd.includes(`--user-data-dir=${tempDir.toLowerCase()}`)
     );
   });
-  writeDebugLogLine('[findChromeParentPidForUserDir]')
-  writeDebugLogLine(JSON.stringify(procs, null, 2))
+  writeDebugLogLine("[findChromeParentPidForUserDir]");
+  writeDebugLogLine(JSON.stringify(procs, null, 2));
 
   if (!chromeChild) return -1;
 
@@ -276,8 +261,8 @@ export async function findChromePidForUserDir(tempDir) {
       cmd.includes(`--user-data-dir=${tempDir.toLowerCase()}`)
     );
   });
-  writeDebugLogLine('[findChromePidForUserDir]')
-  writeDebugLogLine(JSON.stringify(procs, null, 2))
+  writeDebugLogLine("[findChromePidForUserDir]");
+  writeDebugLogLine(JSON.stringify(procs, null, 2));
 
   if (!chromeChild) return -1;
 
@@ -288,17 +273,12 @@ export async function findChromePidForUserDir(tempDir) {
 // Activate a window by PID using xdotool (fallback to wmctrl)
 async function activateWindowByPid(pid) {
   try {
-    const { stdout } = await execFileAsync("./scripts/set_window_top.sh", [pid]);
-    // Format: 0x04800007  0  12345 HOST  Title...
-    // const line = stdout
-    //   .split("\n")
-    //   .map((l) => l.trim())
-    //   .find((l) => l.split(/\s+/)[2] === String(pid));
-    // if (line) {
-    //   const wid = line.split(/\s+/)[0];
-    //   await execFileAsync("wmctrl", ["-ia", wid]);
-    writeDebugLogLine('[activateWindowByPid]', 'info.txt')
-    writeDebugLogLine(stdout, 'info.txt')
+    const { stdout } = await execFileAsync("./scripts/set_window_top.sh", [
+      pid,
+    ]);
+
+    writeDebugLogLine("[activateWindowByPid]", "info.txt");
+    writeDebugLogLine(stdout, "info.txt");
     return true;
     // }
   } catch (_) {}
@@ -353,20 +333,10 @@ async function getScreenSize() {
 }
 
 async function listWindowsByPid(pid) {
-  // xdotool: returns a list of window IDs for the given PID (may include hidden ones)
-  const { stdout } = await execFileAsync("ps", [
-    "-p",
-    String(pid),
-    "-o",
-    "pid,cmd",
-    "--no-headers",
-  ]);
-  console.log("[listWindowsByPid]", stdout);
-  const ids = stdout
-    .split(/\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
+  const procs = await psList();
+  const ids = procs.filter((p) => {
+    return p.pid == pid;
+  });
   return ids;
 }
 
@@ -403,18 +373,25 @@ async function moveAndResize(winId, x, y, w, h) {
  * Finds a Chrome window for the PID, brings it to front, positions & resizes it.
  * @returns {Promise<boolean>} true if a window was activated
  */
-export async function activateUserWindowByPid(userId, pid) {
+export async function activateUserWindowByPid(userId, pid, user) {
   const { screen_w, screen_h } = await getScreenSize();
-
   // const init_x = screen_w - WND_W - ((user_id - 9200) % MAX_ONE_VIEW_CNT) * PIX_STEP;
   // const init_y = screen_h - WND_H - ((user_id - 9200) % MAX_ONE_VIEW_CNT) * PIX_STEP;
   const init_x = 0;
   const init_y = 0;
 
-  const winIds = await listWindowsByPid(pid);
-  if (!winIds.length) return false;
-
+  let winIds = await listWindowsByPid(pid);
+  if (!winIds.length) {
+    const pid = await openChrome(userId);
+    // Save PID if available
+    driver = await buildChrome(userId, true);
+    await UsersDB.updateDetail(userId, "pid", pid);
+    await UsersDB.updateDetail(userId, "driver", driver);
+    winIds = await listWindowsByPid(pid);
+  }
+  writeUserLog(userId, `[winIds] ${JSON.stringify(winIds, null, 2)}`);
   // Find a Chrome window (title contains 'Chrome')
+
   for (const wid of winIds) {
     const title = await getWindowTitle(wid).catch(() => "");
     if (!title || !/chrome/i.test(title)) continue;
@@ -428,5 +405,27 @@ export async function activateUserWindowByPid(userId, pid) {
     return true;
   }
 
-  return false;
+  return null;
+}
+
+export async function buildChrome(userId, headless = false) {
+  const opts = new chrome.Options();
+  opts.addArguments(
+    "--no-sandbox",
+    // "--disable-gpu",
+    "--fast-start",
+    "--disable-features=UserAgentClientHint"
+  );
+  opts.debuggerAddress(`127.0.0.1:${userId}`);
+  if (headless) {
+    if (opts.headless) {
+      // opts.headless();
+    } else {
+      // opts.addArguments("--headless=new");
+    }
+  }
+  return await new Builder()
+    .forBrowser("chrome")
+    .setChromeOptions(opts)
+    .build();
 }

@@ -2,19 +2,22 @@
 import fs from "fs/promises";
 import path from "path";
 import { USERS_LOG_DIR } from "../utils/common.js";
+import { checkProcessIsRunning } from "../utils/helpers.js";
 
-export async function createJSONDatabase(filename) {
+export const STATUS_DONE = "DONE";
+
+export function createJSONDatabase(filename) {
   const filepath = path.join(USERS_LOG_DIR, filename);
   let data = {};
 
   // --- Initialize ---
-  async function init() {
+  function init() {
     try {
-      const fileContent = await fs.readFile(filepath, "utf8");
+      const fileContent = fs.readFileSync(filepath, "utf8");
       data = JSON.parse(fileContent);
     } catch {
       data = {};
-      await save();
+      save();
     }
   }
 
@@ -49,10 +52,33 @@ export async function createJSONDatabase(filename) {
   async function getAllArray() {
     return Object.values(data);
   }
+  async function checkUserByEmail(email) {
+    const allProfiles = await getAllArray();
+    for (const profile of allProfiles) {
+      if (
+        profile["status"] != STATUS_DONE &&
+        (profile["email"] == email || profile["email"] == `${email}@gmail.com`)
+      ) {
+        if (await checkProcessIsRunning(profile["pid"])) {
+          return profile["userId"];
+        }
+      }
+    }
+    return -1;
+  }
 
   // Initialize once when created
-  await init();
+  init();
 
   // --- Return API ---
-  return { set, get, remove, getAll, getAllArray, save, updateDetail };
+  return {
+    set,
+    get,
+    remove,
+    getAll,
+    getAllArray,
+    save,
+    updateDetail,
+    checkUserByEmail,
+  };
 }

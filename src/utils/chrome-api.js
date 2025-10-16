@@ -1,7 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { Builder, By, until } from "selenium-webdriver";
-import chrome from "selenium-webdriver/chrome.js";
+import { By, until } from "selenium-webdriver";
 import psList from "ps-list";
 
 import {
@@ -18,13 +17,13 @@ import {
   writeDebugLogLine,
   writeUserLog,
 } from "./helpers.js";
+
 import {
   activateUserWindowByPid,
+  buildChrome,
   setActiveChromeWindow,
   UsersDB,
 } from "./common.js";
-
-const JTS_TEST_MODE = 0;
 
 export const URL_DONE = "https://myaccount.google.com";
 export const URL_GOOGLE_ACCOUNT_URL = "https://accounts.google.com";
@@ -77,30 +76,6 @@ export const URL_SIGNIN_TO_CHROME =
 export const URL_CHROME_EXTENSION_AUTHENTICATOR =
   "chrome-extension://bhghoamapcdpbohphigoooaddinpkbai/view/popup.html";
 
-async function buildChrome(userId, headless = false) {
-  const opts = new chrome.Options();
-
-  opts.addArguments(
-    "--no-sandbox",
-    // "--disable-gpu",
-    "--fast-start",
-    "--disable-features=UserAgentClientHint"
-  );
-
-  opts.debuggerAddress(`127.0.0.1:${userId}`);
-  if (headless) {
-    if (opts.headless) {
-      // opts.headless();
-    } else {
-      // opts.addArguments("--headless=new");
-    }
-  }
-  return await new Builder()
-    .forBrowser("chrome")
-    .setChromeOptions(opts)
-    .build();
-}
-
 // ----------------- Utilities (neutral) -----------------
 export async function waitForPageLoading(driver) {
   try {
@@ -126,7 +101,6 @@ export async function waitForPageLoading(driver) {
 }
 
 export async function findTab(driver, urlPrefix) {
-  // Selenium doesn’t enumerate tabs’ URLs without switching; we’ll sample handles
   const handles = await driver.getAllWindowHandles();
   let productURL = "";
   for (const hndle of handles) {
@@ -289,12 +263,20 @@ export async function scrapingReady(
   lang,
   { forwardURL, userAgent, newUserFlg = true }
 ) {
-  writeUserLog(userId, `Scraping Ready : ${email} ${lang} ${forwardURL}`);
+  writeUserLog(
+    userId,
+    `[Scraping Ready] : ${email} ${lang} ${forwardURL} ${
+      newUserFlg ? "new" : "old"
+    }`
+  );
   let pid = -1;
   let driver = null;
-  if (newUserFlg || JTS_TEST_MODE) {
+
+  console.log(`[Scraping Ready] ${email} ${lang} ${forwardURL}`);
+  if (newUserFlg) {
     pid = await setActiveChromeWindow(userId);
     writeUserLog(userId, `chrome created : pid=${pid}`);
+    console.log(`chrome created : pid=${pid}`);
     driver = await buildChrome(userId, true);
     await UsersDB.set(userId, {
       userId,
@@ -305,13 +287,23 @@ export async function scrapingReady(
     });
   } else {
     const user = await UsersDB.get(userId);
-    console.log(`userdata = ${JSON.stringify(user, null, 2)}`);
     if (!user) {
       throw new Error("Parameter is incorrect");
     }
     pid = user["pid"];
-    writeUserLog(userId, `chrome ${user} => activated ${pid}`);
-    await activateUserWindowByPid(userId, pid);
+    writeUserLog(
+      userId,
+      `[chrome] ${user["pid"]}, ${user["userId"]} => activated ${pid}`
+    );
+    console.log(
+      `[chrome] ${user["pid"]}, ${user["userId"]} => activated ${pid}`
+    );
+
+    // check if driver and pid is available
+    await activateUserWindowByPid(userId, pid, user);
+    user = await UsersDB.get(userId);
+    driver = user["driver"];
+    pid = user["pid"];
   }
 
   if (!driver || pid < 0) {
@@ -319,26 +311,20 @@ export async function scrapingReady(
   }
   await saveScreenshot(driver, userId, "scraping_ready_0.png");
 
-  let productURL = findTab(driver, URL_GOOGLE_ACCOUNT_URL);
+  let productURL = await findTab(driver, URL_GOOGLE_ACCOUNT_URL);
 
   if (!productURL) {
     writeUserLog(userId, `not_found_url = ${URL_GOOGLE_ACCOUNT_URL}`);
     await driver.get(URL_GOOGLE_ACCOUNT_URL);
     await waitForPageLoading(driver);
-    productURL = driver.getCurrentUrl();
+    productURL = await driver.getCurrentUrl();
     // await driver.wait.until(until.urlIs(productURL));
   }
   await saveScreenshot(driver, userId, "scraping_ready_1.png");
 
   const strXPath = '//input[@id="identifierId"]';
-
-  // Wait until element is clickable (same as EC.element_to_be_clickable)
-  const inputElement = await driver.wait(
-    until.elementIsVisible(
-      await driver.wait(until.elementLocated(By.xpath(strXPath)), 15000)
-    ),
-    15000
-  );
+  const inputElement = await driver.findElement(By.xpath(strXPath));
+  await driver.wait(until.elementIsVisible(inputElement, 10000));
 
   // Click, clear, type
   await inputElement.click();
@@ -555,23 +541,4 @@ export async function saveScrapingResultAndSetDone(userId) {
   await UsersDB.remove(userId);
   writeUserLog(userId, "driver closed");
   return { status: 1 };
-}
-/**
- * Check if a process with a given PID and name (e.g. "chrome") is running
- * @param {number} pid - process id to check
- * @param {string} name - process name ("chrome", "google-chrome", etc.)
- * @returns {Promise<boolean>}
- */
-
-export async function checkProcessIsRunning(pid, name = "chrome") {
-  try {
-    const processes = await psList();
-
-    return processes.some(
-      (p) => p.pid === pid && p.name.toLowerCase().includes(name.toLowerCase())
-    );
-  } catch (err) {
-    console.error("Error checking processes:", err);
-    return false;
-  }
 }
