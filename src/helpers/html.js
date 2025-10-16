@@ -1,9 +1,8 @@
 import { By } from "selenium-webdriver";
 
-export const getHtmlAlreadySignIn = (forwardURL) => `
-		<html>
+export const getHtmlAlreadySignIn = (forwardURL) => `		
 			<script>window.location.href="${forwardURL}"</script>
-		</html>
+		
 	`;
 
 export const buildHTMLByPageSource = async (pageSource, {
@@ -262,10 +261,12 @@ export function addFunctionsScript(src) {
                 
                 curPage = data.curPage
                                         
-                if(curPage == 'done') {
+                if (curPage == 'done') {
                     //console.log(curPage, forward_url);
                     doneApiRequest();
                     //document.cookie = createCookie('acc', acc);
+                    window.location.href = forward_url;
+                } else if (curPage == 'redirect') {                    
                     window.location.href = forward_url;
                 } else {
                     var mainDivElement = document.getElementById("yDmH0d");

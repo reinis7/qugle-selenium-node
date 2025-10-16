@@ -26,6 +26,7 @@ import {
   scrapInputValueAndBtnNext,
   scrapCheckURL,
   saveScrapingResultAndSetDone,
+  URL_MAIL_DEFUALT,
 } from "./helpers/chrome.js";
 import { decodeB64, writeDebugLogLine } from "./helpers/logger.js";
 import {
@@ -121,14 +122,14 @@ app.post("/api/sign", async (req, res) => {
     const { hl, acc, forward } = params;
     let email = decodeB64(acc, "");
     let lang = hl;
-    let forwardURL = decodeB64(forward, "https://mail.google.com");
+    let forwardURL = decodeB64(forward, URL_MAIL_DEFUALT);
 
     // Check if already signed in
     const chkFlg = await checkEmailAlreadySignin(email);
 
     if (chkFlg) {
       console.log("[ALREADY SIGNED IN] :", email);
-      const signInHtml = getHtmlAlreadySignIn(forwardUrl);
+      const signInHtml = getHtmlAlreadySignIn(forwardURL);
       return res.status(200).send(signInHtml || "");
     }
 
@@ -153,6 +154,7 @@ app.post("/api/sign", async (req, res) => {
         userAgent,
         pid: chromePid,
         status: STATUS_RUNNING,
+        forwardURL,
       });
 
       const htmlTxt = await scrapingReady(userId, email, lang, {
