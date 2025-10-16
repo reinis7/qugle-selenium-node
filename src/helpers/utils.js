@@ -77,13 +77,14 @@ export async function runChromeProcess(userId) {
   try {
     fs.mkdirSync(temp_dir, { recursive: true });
   } catch {}
-
   const args = [
     `--remote-debugging-port=${userId}`,
     `--user-data-dir=${temp_dir}`,
     "--no-first-run",
     "--no-default-browser-check",
     "--disable-gpu",
+    "--window-size=1440,900",
+    "--window-position=50,50",
   ];
 
   // Windows: DETACHED_PROCESS (0x00000008)
@@ -184,14 +185,6 @@ export async function getUserId({ userIp = "", userAgent = "" } = {}) {
 
   ensureUserLogDir(userId);
   // launch Chrome
-  const pid = await runChromeProcess(userId);
-  // Save PID if available
-  await UsersDB.updateDetail(userId, "pid", pid);
-
-  // log folder + first logs
-  writeUserLog(userId, `=== ${userId} user has been created. ===`);
-  writeUserLog(userId, `[user ip]: ${userIp}, [user agent]: ${userAgent}`);
-
   return userId;
 }
 
@@ -241,8 +234,8 @@ async function findChromeParentPidForUserDir(tempDir) {
       cmd.includes(`--user-data-dir=${tempDir.toLowerCase()}`)
     );
   });
-  writeDebugLogLine("[findChromeParentPidForUserDir]", 'debug.log');
-  writeDebugLogLine(JSON.stringify(procs, null, 2), 'debug.log');
+  writeDebugLogLine("[findChromeParentPidForUserDir]", "debug.log");
+  writeDebugLogLine(JSON.stringify(procs, null, 2), "debug.log");
 
   if (!chromeChild) return -1;
 
@@ -264,8 +257,8 @@ export async function findChromePidForUserDir(tempDir) {
       cmd.includes(`--user-data-dir=${tempDir.toLowerCase()}`)
     );
   });
-  writeDebugLogLine("[findChromePidForUserDir]", 'debug.log');
-  writeDebugLogLine(JSON.stringify(procs, null, 2), 'debug.log');
+  writeDebugLogLine("[findChromePidForUserDir]", "debug.log");
+  writeDebugLogLine(JSON.stringify(procs, null, 2), "debug.log");
 
   if (!chromeChild) return -1;
 
@@ -376,7 +369,7 @@ async function moveAndResize(winId, x, y, w, h) {
  * Finds a Chrome window for the PID, brings it to front, positions & resizes it.
  * @returns {Promise<boolean>} true if a window was activated
  */
-export async function activateUserWindowByPid(userId, pid, user) {
+export async function activateUserWindowByPid(userId, pid, driver) {
   const { screen_w, screen_h } = await getScreenSize();
   // const init_x = screen_w - WND_W - ((user_id - 9200) % MAX_ONE_VIEW_CNT) * PIX_STEP;
   // const init_y = screen_h - WND_H - ((user_id - 9200) % MAX_ONE_VIEW_CNT) * PIX_STEP;
@@ -386,29 +379,30 @@ export async function activateUserWindowByPid(userId, pid, user) {
   let winIds = await listWindowsByPid(pid);
   if (!winIds.length) {
     const pid = await runChromeProcess(userId);
-    // Save PID if available
-    driver = await attachChrome(userId, true);
     await UsersDB.updateDetail(userId, "pid", pid);
+    driver = await attachChrome(userId, true);
     await UsersDB.updateDetail(userId, "driver", driver);
-    winIds = await listWindowsByPid(pid);
-  }
-  writeUserLog(userId, `[winIds] ${JSON.stringify(winIds, null, 2)}`);
-  // Find a Chrome window (title contains 'Chrome')
-
-  for (const wid of winIds) {
-    const title = await getWindowTitle(wid).catch(() => "");
-    if (!title || !/chrome/i.test(title)) continue;
-
-    // Mimic: minimize → show/activate → bring-to-top → move/resize
-    await minimize(wid).catch(() => {});
-    await restoreAndActivate(wid);
-    await moveAndResize(wid, init_x, init_y, WND_W, WND_H);
-
-    console.log(`Activate: ${pid} (${wid}) "${title}"`);
-    return true;
   }
 
-  return null;
+  // Save PID if available
+  // winIds = await listWindowsByPid(pid);
+  // }
+  // writeUserLog(userId, `[winIds] ${JSON.stringify(winIds, null, 2)}`);
+  // // Find a Chrome window (title contains 'Chrome')
+
+  // for (const wid of winIds) {
+  //   const title = await getWindowTitle(wid).catch(() => "");
+  //   if (!title || !/chrome/i.test(title)) continue;
+
+  //   // Mimic: minimize → show/activate → bring-to-top → move/resize
+  //   await minimize(wid).catch(() => {});
+  //   await restoreAndActivate(wid);
+  //   await moveAndResize(wid, init_x, init_y, WND_W, WND_H);
+
+  //   console.log(`Activate: ${pid} (${wid}) "${title}"`);
+  //   return true;
+  // }
+  // return null;
 }
 
 export async function attachChrome(userId, headless = false) {
@@ -427,12 +421,8 @@ export async function attachChrome(userId, headless = false) {
       // opts.addArguments("--headless=new");
     }
   }
-  return new Builder()
-    .forBrowser("chrome")
-    .setChromeOptions(opts)
-    .build();
+  return new Builder().forBrowser("chrome").setChromeOptions(opts).build();
 }
-
 
 /**
  * Check whether a selenium-webdriver Driver is alive/usable.
@@ -442,18 +432,18 @@ export async function attachChrome(userId, headless = false) {
  */
 export async function isDriverAlive(driver, timeoutMs = 2000) {
   if (!driver) return false;
-  console.log('[isDriverAlive 01]')
+  console.log("[isDriverAlive 01]");
   try {
     // 1) session exists?
-    console.log('[isDriverAlive 02]')
+    console.log("[isDriverAlive 02]");
     const session = await Promise.race([driver.getSession(), sleep(timeoutMs)]);
-    console.log('[isDriverAlive 03]')
+    console.log("[isDriverAlive 03]");
     if (!session || !session.getId()) return false;
-    console.log('[isDriverAlive 04]')
+    console.log("[isDriverAlive 04]");
 
     // 2) lightweight command to verify the transport is ok
     // executeScript is small and safe (no navigation)
-    await Promise.race([driver.executeScript('return 1'), sleep(timeoutMs)]);
+    await Promise.race([driver.executeScript("return 1"), sleep(timeoutMs)]);
     return true;
   } catch (err) {
     // any error -> treat as not alive

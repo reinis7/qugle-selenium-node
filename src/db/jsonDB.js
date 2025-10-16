@@ -1,5 +1,6 @@
 // file: jsonDatabase.js
-import fs from "fs/promises";
+import fsPromise from "fs/promises";
+import fs from "fs";
 import path from "path";
 import { USERS_LOG_DIR } from "../helpers/utils.js";
 
@@ -16,14 +17,15 @@ export function createJSONDatabase(filename) {
     try {
       const fileContent = fs.readFileSync(filepath, "utf8");
       data = JSON.parse(fileContent);
-    } catch {
+    } catch (e) {
+      console.error(`[createJSONDatabase] ${e.message}`)
       data = {};
       save();
     }
   }
 
   async function save() {
-    await fs.writeFile(
+    await fsPromise.writeFile(
       filepath,
       JSON.stringify(
         data,

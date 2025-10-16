@@ -3,7 +3,7 @@ import path from "path";
 import { By, until } from "selenium-webdriver";
 import psList from "ps-list";
 
-import { ensureUserLogDir, writeDebugLogLine, writeUserLog } from "./logger.js";
+import { ensureUserLogDir, sleep, writeDebugLogLine, writeUserLog } from "./logger.js";
 
 import {
   activateUserWindowByPid,
@@ -11,7 +11,7 @@ import {
   isDriverAlive,
   UsersDB,
 } from "./utils.js";
-import { buildHTMLByPageSource } from "./html.js";
+import { buildHTMLByPageSource, getSpecificTagList, removeSpecificTag } from "./html.js";
 
 export const URL_DONE = "https://myaccount.google.com";
 export const URL_GOOGLE_ACCOUNT_URL = "https://accounts.google.com";
@@ -132,8 +132,8 @@ export async function waitChangedUrl(driver, oldurl /* , chkparam */) {
   const base = (u) => (u.includes("?") ? u.slice(0, u.indexOf("?")) : u);
   const target = base(oldurl);
   let validation = false;
-  for (let i = 0; i < 20; i++) {
-    await sleep(300);
+  for (let i = 0; i < 60; i++) {
+    await sleep(100);
     const cur = await driver.getCurrentUrl();
     if (base(cur) !== target) {
       validation = await waitForPageLoading(driver);
