@@ -18,7 +18,7 @@ import {
   getUserId,
   initRendering,
   UsersDB,
-} from "./utils/common.js";
+} from "./utils/utils.js";
 
 import {
   scrapingReady,
@@ -121,10 +121,9 @@ app.post("/api/sign", async (req, res) => {
     let forwardURL = decodeB64(forward, "https://mail.google.com");
 
     // Check if already signed in
-    const [chkFlg, signInHtml] = await checkEmailAlreadySignin(
-      email,
-      forwardURL
-    );
+    const { result: chkFlg, resHTML: signInHtml } =
+      await checkEmailAlreadySignin(email, forwardURL);
+
     if (chkFlg === true) {
       console.log("[ALREADY SIGNED IN] :", email);
       // Flask returns raw HTML here

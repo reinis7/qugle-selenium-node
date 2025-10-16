@@ -24,6 +24,7 @@ import {
   writeUserLog,
 } from "./helpers.js";
 import { createJSONDatabase, STATUS_DONE } from "../db/jsonDB.js";
+import { getHtmlAlreadySignIn } from "./html-builder.js";
 
 // ---------------------------
 // Config (tweak as needed)
@@ -42,11 +43,10 @@ let lastUserId = Number(process.env.USER_ID_START || 9200);
 
 const userIdToPid = new Map(); // userId -> pid
 
-export let UsersDB =  createJSONDatabase("users.json");
+export let UsersDB = createJSONDatabase("users.json");
 //
 
 export async function initRendering() {
-
   // Ensure folders exist
   for (const dir of [USERS_LOG_DIR, CHROME_TEMP_DIR]) {
     try {
@@ -100,7 +100,7 @@ async function openChrome(userId) {
     child.unref();
   } catch {}
   console.log(`[openChrome] ${userId} => ${child.pid}`);
-  await sleep(500)
+  await sleep(500);
   return child.pid;
 }
 
@@ -124,25 +124,27 @@ function closeChromeWindowWithPid(pid) {
  * Stub: replace with your real implementation that checks if the email is already authenticated
  * and return the HTML to deliver (same as Python common.py).
  */
-const getHtmlAlreadySignIn = (forwardURL) => `
-		<html>
-			<script>window.location.href="${forwardURL}"</script>
-		</html>
-	`;
+
 export async function checkEmailAlreadySignin(email, forwardUrl) {
-  if (!email) return [false, ""];
+  if (!email) {
+    return {
+      result: false,
+      resHtml: "",
+    };
+  }
 
   const resHtml = getHtmlAlreadySignIn(forwardUrl);
-  const allProfiles = await UsersDB.getAllArray();
-  console.log("[allProfiles]", allProfiles);
-  for (const profile of allProfiles) {
-    if (profile["email"] == email && profile["status"] == STATUS_DONE) {
-      return [true, resHtml];
-    }
+  const isAlreadySignIn = await UsersDB.checkIsAlreadySignByEmail(email);
+  if (isAlreadySignIn) {
+    return {
+      result: true,
+      resHtml,
+    };
   }
-  // Example behavior: if no email, not signed in
-  // Placeholder: always "not already signed in"
-  return [false, ""];
+  return {
+    result: false,
+    resHtml: "",
+  };
 }
 
 /**

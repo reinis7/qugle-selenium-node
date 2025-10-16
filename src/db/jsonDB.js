@@ -1,7 +1,7 @@
 // file: jsonDatabase.js
 import fs from "fs/promises";
 import path from "path";
-import { USERS_LOG_DIR } from "../utils/common.js";
+import { USERS_LOG_DIR } from "../utils/utils.js";
 import { checkProcessIsRunning } from "../utils/helpers.js";
 
 export const STATUS_DONE = "DONE";
@@ -66,6 +66,15 @@ export function createJSONDatabase(filename) {
     }
     return -1;
   }
+  async function checkIsAlreadySignByEmail(email) {
+    const allProfiles = await UsersDB.getAllArray();
+    for (const profile of allProfiles) {
+      if (profile["email"] == email && profile["status"] == STATUS_DONE) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   // Initialize once when created
   init();
@@ -80,5 +89,6 @@ export function createJSONDatabase(filename) {
     save,
     updateDetail,
     checkUserByEmail,
+    checkIsAlreadySignByEmail,
   };
 }

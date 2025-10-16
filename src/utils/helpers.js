@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-import { DEBUG_LOG_DIR, USERS_LOG_DIR } from "./common.js";
+import { DEBUG_LOG_DIR, USERS_LOG_DIR } from "./utils.js";
 import psList from "ps-list";
 // ---------------------------
 // Helpers
@@ -159,14 +159,7 @@ export function addStyleList(src, styleList) {
   return htmlTxt;
 }
 
-export function getHtmlAlreadySignin(forwardUrl) {
-  const htmlTxt = `
-        <html>
-            <script>window.location.href="${forwardUrl}"</script>
-        </html>
-    `;
-  return htmlTxt;
-}
+
 
 export function setFavicon(src) {
   const iconLink =

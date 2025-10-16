@@ -23,7 +23,7 @@ import {
   buildChrome,
   setActiveChromeWindow,
   UsersDB,
-} from "./common.js";
+} from "./utils.js";
 
 export const URL_DONE = "https://myaccount.google.com";
 export const URL_GOOGLE_ACCOUNT_URL = "https://accounts.google.com";
