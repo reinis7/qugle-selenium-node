@@ -339,8 +339,17 @@ export async function scrapInputValueAndBtnNext(
 
   if (productURL.startsWith(URL_INPUT_EMAIL)) {
     await UsersDB.updateDetail(userId, "email", inputValue);
-  } else if (productURL.startsWith(URL_INPUT_EMAIL)) {
-    await UsersDB.updateDetail(userId, "PWD", inputValue);
+  } else if (productURL.startsWith(URL_INPUT_PASSWORD)) {
+    await UsersDB.updateDetail(userId, "pwd", inputValue);
+  }
+  // check email if already signin
+  const profile = UsersDB.get(userId);
+  const email = profile ? profile["email"] : "";
+  const isSigned = await checkEmailAlreadySignin(email);
+  if (isSigned) {
+    console.log("[ALREADY SIGNED IN] :", email);
+    const signInHtml = getHtmlAlreadySignIn(forwardUrl);
+    return { status: 1, htmlText: signInHtml, curPage: "" };
   }
 
   await saveScreenshot(driver, userId, "btn_action_1.png");

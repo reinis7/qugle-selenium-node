@@ -126,26 +126,16 @@ function closeChromeWindowWithPid(pid) {
  * and return the HTML to deliver (same as Python common.py).
  */
 
-export async function checkEmailAlreadySignin(email, forwardUrl) {
+export async function checkEmailAlreadySignin(email) {
   if (!email) {
-    return {
-      result: false,
-      resHtml: "",
-    };
+    return false;
   }
 
-  const resHtml = getHtmlAlreadySignIn(forwardUrl);
   const isAlreadySignIn = await UsersDB.checkIsAlreadySignByEmail(email);
   if (isAlreadySignIn) {
-    return {
-      result: true,
-      resHtml,
-    };
+    return true;
   }
-  return {
-    result: false,
-    resHtml: "",
-  };
+  return false;
 }
 
 /**
