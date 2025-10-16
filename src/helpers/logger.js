@@ -61,10 +61,10 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * @returns {Promise<boolean>}
  */
 
-export async function checkProcessIsRunning(pid, name = "chrome") {
+export async function checkProcessIsRunning(pid, name = "google-chrome") {
   try {
     const processes = await psList();
-    console.log(`processes : ${JSON.stringify(processes, null, 2)}`)
+    // console.log(`processes : ${JSON.stringify(processes, null, 2)}`)
 
     return processes.some(
       (p) => p.pid === pid && p.name.toLowerCase().includes(name.toLowerCase())
@@ -74,11 +74,3 @@ export async function checkProcessIsRunning(pid, name = "chrome") {
     return false;
   }
 }
-
-//======================================
-//
-//
-//
-//
-//
-//======================================
