@@ -24,10 +24,12 @@ export const writeDebugLogLine = (data = "", filename = "gauth_log.txt") => {
     }
     const filePath = path.join(dirPath, `${filename}`);
     // console.log('[writeLogLine]', dirPath, filePath)
+    const ts = new Date().toISOString().replace("T", " ").replace("Z", "");
+    const msg = `[${ts}] ${data} \n`
     if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, data + "\n");
+      fs.writeFileSync(filePath, msg);
     } else {
-      fs.appendFileSync(filePath, data + "\n");
+      fs.appendFileSync(filePath, msg);
     }
   } catch (error) {
     console.error(error);

@@ -3,11 +3,7 @@ import path from "path";
 import { By, until } from "selenium-webdriver";
 import psList from "ps-list";
 
-import {
-  ensureUserLogDir,
-  writeDebugLogLine,
-  writeUserLog,
-} from "./logger.js";
+import { ensureUserLogDir, writeDebugLogLine, writeUserLog } from "./logger.js";
 
 import {
   activateUserWindowByPid,
@@ -15,6 +11,7 @@ import {
   isDriverAlive,
   UsersDB,
 } from "./utils.js";
+import { buildHTMLByPageSource } from "./html.js";
 
 export const URL_DONE = "https://myaccount.google.com";
 export const URL_GOOGLE_ACCOUNT_URL = "https://accounts.google.com";
@@ -260,10 +257,12 @@ export async function scrapingReady(
 
   const userProfile = UsersDB.get(userId);
   let driver = userProfile["driver"];
+  const pid = userProfile["pid"];
+  console.log("[driver1]", driver);
   try {
-    if (!isDriverAlive(driver)) {
+    if (!driver || !isDriverAlive(driver)) {
       driver = await attachChrome(userId, false);
-      await UserDB.set(userId, "driver", driver);
+      await UsersDB.updateDetail(userId, "driver", driver);
       writeUserLog(userId, `chrome created : pid=${pid}`);
       console.log(`chrome created : pid=${pid}`);
     }
@@ -297,9 +296,14 @@ export async function scrapingReady(
 
   const pageSource = await driver.getPageSource();
   // Snapshot sanitized HTML (no scripts/iframes)
-  writeDebugLogLine(`[pageSource] ${pageSource}`);
-  
-  const htmlText = await buildHTMLByPageSource(pageSource);
+  writeDebugLogLine(`[pageSource] ${pageSource}`, "debug.log");
+
+  const htmlText = await buildHTMLByPageSource(pageSource, {
+    driver,
+    email,
+    userId,
+    forwardURL,
+  });
   return htmlText;
 }
 

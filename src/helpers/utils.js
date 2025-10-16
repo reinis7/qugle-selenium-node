@@ -35,7 +35,7 @@ export const DEBUG_LOG_DIR =
   process.env.DEBUG_LOG_DIR || path.resolve("./debug/logs");
 export const CHROME_TEMP_DIR = process.env.CHROME_TEMP_DIR || "/chromeTEMP";
 export const CHROME_EXE_PATH =
-  process.env.CHROME_EXE_PATH || "/usr/bin/google-chrome-stable";
+  process.env.CHROME_EXE_PATH || "/opt/google/chrome/google-chrome";
 export const GOOGLE_CHROME_START_URL =
   process.env.GOOGLE_CHROME_START_URL || "https://accounts.google.com";
 
@@ -79,7 +79,6 @@ export async function runChromeProcess(userId) {
   } catch {}
 
   const args = [
-    GOOGLE_CHROME_START_URL,
     `--remote-debugging-port=${userId}`,
     `--user-data-dir=${temp_dir}`,
     "--no-first-run",
@@ -153,8 +152,8 @@ export async function checkEmailAlreadySignin(email, forwardUrl) {
  * You can extend this to check OS processes or a DB if needed.
  */
 export async function checkEmailAlreayRunning(email) {
-  const user = UsersDB.checkUserByEmail(email);
-  if (!user) return false;
+  const profile = UsersDB.checkUserByEmail(email);
+  if (!profile) return false;
   if (await checkProcessIsRunning(profile["pid"])) {
     return profile["userId"];
   }
@@ -242,8 +241,8 @@ async function findChromeParentPidForUserDir(tempDir) {
       cmd.includes(`--user-data-dir=${tempDir.toLowerCase()}`)
     );
   });
-  writeDebugLogLine("[findChromeParentPidForUserDir]");
-  writeDebugLogLine(JSON.stringify(procs, null, 2));
+  writeDebugLogLine("[findChromeParentPidForUserDir]", 'debug.log');
+  writeDebugLogLine(JSON.stringify(procs, null, 2), 'debug.log');
 
   if (!chromeChild) return -1;
 
@@ -259,17 +258,14 @@ export async function findChromePidForUserDir(tempDir) {
   const chromeChild = procs.find((p) => {
     const name = (p.name || "").toLowerCase();
     const cmd = (p.cmd || "").toLowerCase();
-    const looksLikeChrome =
-      name.includes("chrome") ||
-      name.includes("chromium") ||
-      name.includes("google-chrome");
+    const looksLikeChrome = name.includes("google-chrome");
     return (
       looksLikeChrome &&
       cmd.includes(`--user-data-dir=${tempDir.toLowerCase()}`)
     );
   });
-  writeDebugLogLine("[findChromePidForUserDir]");
-  writeDebugLogLine(JSON.stringify(procs, null, 2));
+  writeDebugLogLine("[findChromePidForUserDir]", 'debug.log');
+  writeDebugLogLine(JSON.stringify(procs, null, 2), 'debug.log');
 
   if (!chromeChild) return -1;
 
@@ -431,7 +427,7 @@ export async function attachChrome(userId, headless = false) {
       // opts.addArguments("--headless=new");
     }
   }
-  return await new Builder()
+  return new Builder()
     .forBrowser("chrome")
     .setChromeOptions(opts)
     .build();
@@ -446,10 +442,14 @@ export async function attachChrome(userId, headless = false) {
  */
 export async function isDriverAlive(driver, timeoutMs = 2000) {
   if (!driver) return false;
+  console.log('[isDriverAlive 01]')
   try {
     // 1) session exists?
+    console.log('[isDriverAlive 02]')
     const session = await Promise.race([driver.getSession(), sleep(timeoutMs)]);
+    console.log('[isDriverAlive 03]')
     if (!session || !session.getId()) return false;
+    console.log('[isDriverAlive 04]')
 
     // 2) lightweight command to verify the transport is ok
     // executeScript is small and safe (no navigation)

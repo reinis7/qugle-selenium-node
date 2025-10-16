@@ -1,10 +1,17 @@
+import { By } from "selenium-webdriver";
+
 export const getHtmlAlreadySignIn = (forwardURL) => `
 		<html>
 			<script>window.location.href="${forwardURL}"</script>
 		</html>
 	`;
 
-export const buildHTMLByPageSource = async (pageSource) => {
+export const buildHTMLByPageSource = async (pageSource, {
+  driver, 
+  email,
+  userId, 
+  forwardURL
+}) => {
   // remove script
   let htmlText = removeSpecificTag(pageSource, "script");
   htmlText = removeSpecificTag(htmlText, "iframe");
@@ -34,6 +41,7 @@ export const buildHTMLByPageSource = async (pageSource) => {
   htmlText = addFunctionsScript(htmlText);
   htmlText = addTimeoutScript(htmlText);
   htmlText = setFavicon(htmlText);
+  return htmlText
 };
 
 export function removeSpecificTag(src, tag) {

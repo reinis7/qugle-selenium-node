@@ -17,6 +17,7 @@ import {
   checkEmailAlreayRunning,
   getUserId,
   initRendering,
+  runChromeProcess,
   UsersDB,
 } from "./helpers/utils.js";
 
