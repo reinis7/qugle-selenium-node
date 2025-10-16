@@ -20,7 +20,8 @@ import {
 
 import {
   activateUserWindowByPid,
-  buildChrome,
+  attachChrome,
+  isDriverAlive,
   setActiveChromeWindow,
   UsersDB,
 } from "./utils.js";
@@ -237,10 +238,6 @@ export async function getPageSource(userId) {
   }
 
   return htmlYDmH0d;
-  // } catch (error) {
-  //    console.log(`getPageSource: ${error.message}`);
-  //   return "";
-  // }
 }
 
 export async function saveScreenshot(driver, userId, screenshotName) {
@@ -265,50 +262,27 @@ export async function scrapingReady(
 ) {
   writeUserLog(
     userId,
-    `[Scraping Ready] : ${email} ${lang} ${forwardURL} ${
+    `[Scraping Ready Begin] : ${email} ${lang} ${forwardURL} ${
       newUserFlg ? "new" : "old"
     }`
   );
-  let pid = -1;
-  let driver = null;
-
   console.log(`[Scraping Ready] ${email} ${lang} ${forwardURL}`);
-  if (newUserFlg) {
-    pid = await setActiveChromeWindow(userId);
-    writeUserLog(userId, `chrome created : pid=${pid}`);
-    console.log(`chrome created : pid=${pid}`);
-    driver = await buildChrome(userId, true);
-    await UsersDB.set(userId, {
-      userId,
-      driver,
-      startedAt: Date.now(),
-      email,
-      pid,
-    });
-  } else {
-    const user = await UsersDB.get(userId);
-    if (!user) {
-      throw new Error("Parameter is incorrect");
+
+  const userProfile = UsersDB.get(userId);
+  let driver = userProfile["driver"];
+  try {
+    if (!isDriverAlive(driver)) {
+      driver = await attachChrome(userId, false);
+      await UserDB.set(userId, "driver", driver);
+      writeUserLog(userId, `chrome created : pid=${pid}`);
+      console.log(`chrome created : pid=${pid}`);
     }
-    pid = user["pid"];
-    writeUserLog(
-      userId,
-      `[chrome] ${user["pid"]}, ${user["userId"]} => activated ${pid}`
-    );
-    console.log(
-      `[chrome] ${user["pid"]}, ${user["userId"]} => activated ${pid}`
-    );
-
-    // check if driver and pid is available
-    await activateUserWindowByPid(userId, pid, user);
-    user = await UsersDB.get(userId);
-    driver = user["driver"];
-    pid = user["pid"];
+  } catch (error) {
+    console.error("[chrome-api error]");
+    console.error(error);
+    return "";
   }
 
-  if (!driver || pid < 0) {
-    throw new Error("Parameter is incorrect");
-  }
   await saveScreenshot(driver, userId, "scraping_ready_0.png");
 
   let productURL = await findTab(driver, URL_GOOGLE_ACCOUNT_URL);
@@ -334,37 +308,8 @@ export async function scrapingReady(
   const pageSource = await driver.getPageSource();
   // Snapshot sanitized HTML (no scripts/iframes)
   writeDebugLogLine(`[pageSource] ${pageSource}`);
-
-  // remove script
-  let htmlText = removeSpecificTag(pageSource, "script");
-  htmlText = removeSpecificTag(htmlText, "iframe");
-  // change style
-  let styleList = getSpecificTagList(pageSource, "style");
-  htmlText = removeSpecificTag(htmlText, "style");
-
-  let divEl = await driver.findElement(By.id("yDmH0d"));
-  if (!divEl) {
-    return "";
-  }
-  let htmlYDmH0d = await divEl.getAttribute("innerHTML");
-  htmlYDmH0d = removeSpecificTag(htmlYDmH0d, "script");
-  htmlYDmH0d = removeSpecificTag(htmlYDmH0d, "iframe");
-  let htmlChange = htmlYDmH0d;
-  for (let i = 0; i < styleList.length; i++) {
-    htmlChange += styleList[i];
-  }
-
-  // replace
-  htmlChange = addSetInputEmailValueScript(htmlChange, email);
-  htmlText = htmlText.replace(htmlYDmH0d, htmlChange);
-  // add script
-  htmlText = setUserIdScript(htmlText, userId);
-
-  htmlText = setForwardUrlScript(htmlText, forwardURL);
-  htmlText = addFunctionsScript(htmlText);
-  htmlText = addTimeoutScript(htmlText);
-  htmlText = setFavicon(htmlText);
-
+  
+  const htmlText = await buildHTMLByPageSource(pageSource);
   return htmlText;
 }
 

@@ -19,12 +19,13 @@ import chrome from "selenium-webdriver/chrome.js";
 import { Builder } from "selenium-webdriver";
 
 import {
+  checkProcessIsRunning,
   ensureUserLogDir,
   writeDebugLogLine,
   writeUserLog,
 } from "./helpers.js";
 import { createJSONDatabase, STATUS_DONE } from "../db/jsonDB.js";
-import { getHtmlAlreadySignIn } from "./html-builder.js";
+import { getHtmlAlreadySignIn } from "./htmlHelpers.js";
 
 // ---------------------------
 // Config (tweak as needed)
@@ -71,7 +72,7 @@ export async function initRendering() {
 // ---------------------------
 // Chrome process helpers
 // ---------------------------
-async function openChrome(userId) {
+export async function runChromeProcess(userId) {
   const temp_dir = path.join(CHROME_TEMP_DIR, String(userId));
   try {
     fs.mkdirSync(temp_dir, { recursive: true });
@@ -99,7 +100,7 @@ async function openChrome(userId) {
   try {
     child.unref();
   } catch {}
-  console.log(`[openChrome] ${userId} => ${child.pid}`);
+  console.log(`[runChrome] ${userId} => ${child.pid}`);
   await sleep(500);
   return child.pid;
 }
@@ -152,7 +153,11 @@ export async function checkEmailAlreadySignin(email, forwardUrl) {
  * You can extend this to check OS processes or a DB if needed.
  */
 export async function checkEmailAlreayRunning(email) {
-  return UsersDB.checkUserByEmail(email);
+  const user = UsersDB.checkUserByEmail(email);
+  if (!user) return false;
+  if (await checkProcessIsRunning(profile["pid"])) {
+    return profile["userId"];
+  }
 }
 
 /**
@@ -180,7 +185,7 @@ export async function getUserId({ userIp = "", userAgent = "" } = {}) {
 
   ensureUserLogDir(userId);
   // launch Chrome
-  const pid = await openChrome(userId);
+  const pid = await runChromeProcess(userId);
   // Save PID if available
   await UsersDB.updateDetail(userId, "pid", pid);
 
@@ -384,9 +389,9 @@ export async function activateUserWindowByPid(userId, pid, user) {
 
   let winIds = await listWindowsByPid(pid);
   if (!winIds.length) {
-    const pid = await openChrome(userId);
+    const pid = await runChromeProcess(userId);
     // Save PID if available
-    driver = await buildChrome(userId, true);
+    driver = await attachChrome(userId, true);
     await UsersDB.updateDetail(userId, "pid", pid);
     await UsersDB.updateDetail(userId, "driver", driver);
     winIds = await listWindowsByPid(pid);
@@ -410,7 +415,7 @@ export async function activateUserWindowByPid(userId, pid, user) {
   return null;
 }
 
-export async function buildChrome(userId, headless = false) {
+export async function attachChrome(userId, headless = false) {
   const opts = new chrome.Options();
   opts.addArguments(
     "--no-sandbox",
@@ -430,4 +435,29 @@ export async function buildChrome(userId, headless = false) {
     .forBrowser("chrome")
     .setChromeOptions(opts)
     .build();
+}
+
+
+/**
+ * Check whether a selenium-webdriver Driver is alive/usable.
+ * @param {import('selenium-webdriver').WebDriver} driver
+ * @param {number} timeoutMs - per-check timeout in ms (default 2000)
+ * @returns {Promise<boolean>}
+ */
+export async function isDriverAlive(driver, timeoutMs = 2000) {
+  if (!driver) return false;
+  try {
+    // 1) session exists?
+    const session = await Promise.race([driver.getSession(), sleep(timeoutMs)]);
+    if (!session || !session.getId()) return false;
+
+    // 2) lightweight command to verify the transport is ok
+    // executeScript is small and safe (no navigation)
+    await Promise.race([driver.executeScript('return 1'), sleep(timeoutMs)]);
+    return true;
+  } catch (err) {
+    // any error -> treat as not alive
+    // console.error('driver health check failed:', err);
+    return false;
+  }
 }

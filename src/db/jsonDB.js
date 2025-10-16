@@ -2,9 +2,10 @@
 import fs from "fs/promises";
 import path from "path";
 import { USERS_LOG_DIR } from "../utils/utils.js";
-import { checkProcessIsRunning } from "../utils/helpers.js";
 
 export const STATUS_DONE = "DONE";
+export const STATUS_INIT = "INIT";
+export const STATUS_RUNNING = "RUNNING";
 
 export function createJSONDatabase(filename) {
   const filepath = path.join(USERS_LOG_DIR, filename);
@@ -22,7 +23,17 @@ export function createJSONDatabase(filename) {
   }
 
   async function save() {
-    await fs.writeFile(filepath, JSON.stringify(data, null, 2));
+    await fs.writeFile(
+      filepath,
+      JSON.stringify(
+        data,
+        (key, value) => {
+          if (key == "driver") return undefined;
+          return value;
+        },
+        2
+      )
+    );
   }
 
   async function set(key, value) {
@@ -36,7 +47,7 @@ export function createJSONDatabase(filename) {
     return value;
   }
 
-  async function get(key) {
+  function get(key) {
     return data[key];
   }
 
@@ -45,29 +56,27 @@ export function createJSONDatabase(filename) {
     await save();
   }
 
-  async function getAll() {
+  function getAll() {
     return data;
   }
 
-  async function getAllArray() {
+  function getAllArray() {
     return Object.values(data);
   }
-  async function checkUserByEmail(email) {
-    const allProfiles = await getAllArray();
+  function checkUserByEmail(email) {
+    const allProfiles = getAllArray();
     for (const profile of allProfiles) {
       if (
         profile["status"] != STATUS_DONE &&
         (profile["email"] == email || profile["email"] == `${email}@gmail.com`)
       ) {
-        if (await checkProcessIsRunning(profile["pid"])) {
-          return profile["userId"];
-        }
+        return profile;
       }
     }
-    return -1;
+    return null;
   }
   async function checkIsAlreadySignByEmail(email) {
-    const allProfiles = await UsersDB.getAllArray();
+    const allProfiles = getAllArray();
     for (const profile of allProfiles) {
       if (profile["email"] == email && profile["status"] == STATUS_DONE) {
         return true;

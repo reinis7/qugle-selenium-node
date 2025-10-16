@@ -62,6 +62,7 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function checkProcessIsRunning(pid, name = "chrome") {
   try {
     const processes = await psList();
+    console.log(`processes : ${JSON.stringify(processes, null, 2)}`)
 
     return processes.some(
       (p) => p.pid === pid && p.name.toLowerCase().includes(name.toLowerCase())

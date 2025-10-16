@@ -25,12 +25,13 @@ import {
   scrapInputValueAndBtnNext,
   scrapCheckURL,
   saveScrapingResultAndSetDone,
-} from "./utils/chrome-api.js";
+} from "./utils/chromeHelpers.js";
 import { decodeB64, writeDebugLogLine } from "./utils/helpers.js";
 import {
   checkAgentValidation,
   checkClientIpValidation,
 } from "./utils/security.js";
+import { STATUS_INIT, STATUS_RUNNING } from "./db/jsonDB.js";
 
 // ---------------------------
 // Config
@@ -140,14 +141,19 @@ app.post("/api/sign", async (req, res) => {
         userAgent,
       });
       console.log("[NEW USER ID] :", userId, email, lang, forwardURL);
+      // Running open here      
+      // await unChrom
+      const chromePid = await runChromeProcess(userId)
+      
       await UsersDB.set(userId, {
         userId,
         email,
         lang,
         userAgent,
-        status: "INIT",
+        pid: chromePid,
+        status: STATUS_RUNNING,
       });
-
+      
       const htmlTxt = await scrapingReady(userId, email, lang, {
         forwardURL,
         userAgent,
