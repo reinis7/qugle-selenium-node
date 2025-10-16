@@ -23,9 +23,9 @@ import {
   ensureUserLogDir,
   writeDebugLogLine,
   writeUserLog,
-} from "./helpers.js";
+} from "./logger.js";
 import { createJSONDatabase, STATUS_DONE } from "../db/jsonDB.js";
-import { getHtmlAlreadySignIn } from "./htmlHelpers.js";
+import { getHtmlAlreadySignIn } from "./html.js";
 
 // ---------------------------
 // Config (tweak as needed)

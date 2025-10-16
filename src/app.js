@@ -18,19 +18,19 @@ import {
   getUserId,
   initRendering,
   UsersDB,
-} from "./utils/utils.js";
+} from "./helpers/utils.js";
 
 import {
   scrapingReady,
   scrapInputValueAndBtnNext,
   scrapCheckURL,
   saveScrapingResultAndSetDone,
-} from "./utils/chromeHelpers.js";
-import { decodeB64, writeDebugLogLine } from "./utils/helpers.js";
+} from "./helpers/chrome.js";
+import { decodeB64, writeDebugLogLine } from "./helpers/logger.js";
 import {
   checkAgentValidation,
   checkClientIpValidation,
-} from "./utils/security.js";
+} from "./helpers/security.js";
 import { STATUS_INIT, STATUS_RUNNING } from "./db/jsonDB.js";
 
 // ---------------------------

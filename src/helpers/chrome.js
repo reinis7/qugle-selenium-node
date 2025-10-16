@@ -4,25 +4,15 @@ import { By, until } from "selenium-webdriver";
 import psList from "ps-list";
 
 import {
-  addFunctionsScript,
-  addSetInputEmailValueScript,
-  addTimeoutScript,
   ensureUserLogDir,
-  getSpecificTagList,
-  removeSpecificTag,
-  setFavicon,
-  setForwardUrlScript,
-  setUserIdScript,
-  sleep,
   writeDebugLogLine,
   writeUserLog,
-} from "./helpers.js";
+} from "./logger.js";
 
 import {
   activateUserWindowByPid,
   attachChrome,
   isDriverAlive,
-  setActiveChromeWindow,
   UsersDB,
 } from "./utils.js";
 

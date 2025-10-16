@@ -1,7 +1,7 @@
 // file: jsonDatabase.js
 import fs from "fs/promises";
 import path from "path";
-import { USERS_LOG_DIR } from "../utils/utils.js";
+import { USERS_LOG_DIR } from "../helpers/utils.js";
 
 export const STATUS_DONE = "DONE";
 export const STATUS_INIT = "INIT";
