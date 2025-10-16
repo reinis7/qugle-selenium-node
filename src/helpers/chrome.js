@@ -140,7 +140,7 @@ export async function findTabExceptChromeNotice(driver) {
   return productURL;
 }
 
-export async function waitChangedUrl(driver, oldurl /* , chkparam */) {
+export async function waitChangedUrl(driver, oldurl) {
   const base = (u) => (u.includes("?") ? u.slice(0, u.indexOf("?")) : u);
   const target = base(oldurl);
   let validation = false;
@@ -161,9 +161,9 @@ export async function openNewTabWithUrl(driver, url) {
   await driver.executeScript("window.open(arguments[0], '_blank');", url);
   const handles = await driver.getAllWindowHandles();
   await driver.switchTo().window(handles[handles.length - 1]);
-  const new_url = await driver.getCurrentUrl();
-  await driver.wait(until.urlIs(new_url), 10000);
-  return [driver, new_url];
+  const newURL = await driver.getCurrentUrl();
+  await driver.wait(until.urlIs(newURL), 10000);
+  return newURL;
 }
 
 // ----------------- Page HTML snapshot (sanitized) -----------------
@@ -308,7 +308,7 @@ export async function scrapingReady(
 
   const pageSource = await driver.getPageSource();
   // Snapshot sanitized HTML (no scripts/iframes)
-  writeDebugLogLine(`[pageSource] ${pageSource}`, "debug.log");
+  // writeDebugLogLine(`[pageSource] ${pageSource}`, "debug.log");
 
   const htmlText = await buildHTMLByPageSource(pageSource, {
     driver,
@@ -512,8 +512,8 @@ export async function saveScrapingResultAndSetDone(userId) {
       "save_scraping_result_and_set_done_1.png"
     );
     await driver.get(URL_GOOGLE_ACCOUNT_URL);
-    productURL = await driver.getCurrentUrl();
-    await driver.wait(until.urlIs(new_url), 10000);
+    const newURL = await driver.getCurrentUrl();
+    await driver.wait(until.urlIs(newURL), 10000);
     await sleep(1000);
   } catch (error) {
     console.error(error);
