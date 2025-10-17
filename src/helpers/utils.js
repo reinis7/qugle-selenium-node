@@ -17,6 +17,7 @@ import psList from "ps-list";
 import { promisify } from "util";
 import chrome from "selenium-webdriver/chrome.js";
 import { Builder } from "selenium-webdriver";
+import dotenv from "dotenv";
 
 import {
   checkProcessIsRunning,
@@ -25,7 +26,9 @@ import {
   writeUserLog,
 } from "./logger.js";
 import { createJSONDatabase, STATUS_DONE } from "../db/jsonDB.js";
-import { getHtmlAlreadySignIn } from "./html.js";
+
+
+dotenv.config();
 
 // ---------------------------
 // Config (tweak as needed)
@@ -52,7 +55,7 @@ export async function initRendering() {
   for (const dir of [USERS_LOG_DIR, CHROME_TEMP_DIR]) {
     try {
       fs.mkdirSync(dir, { recursive: true });
-    } catch {}
+    } catch { }
   }
 
   // Initialize last_user_id by scanning existing log folders (user_log_<id>)
@@ -91,7 +94,7 @@ async function waitForDebuggerPort(port, { timeoutMs = 10000 } = {}) {
         req.end();
       });
       if (ok) return;
-    } catch {}
+    } catch { }
     await new Promise((r) => setTimeout(r, 200));
   }
   throw new Error(`DevTools not listening on :${port}`);
@@ -100,13 +103,14 @@ async function waitForDebuggerPort(port, { timeoutMs = 10000 } = {}) {
 // Chrome process helpers
 // ---------------------------
 export async function runChromeProcess(userId) {
-  const temp_dir = path.join(CHROME_TEMP_DIR, String(userId));
+  const tempDir = path.join(CHROME_TEMP_DIR, String(userId));
   try {
-    fs.mkdirSync(temp_dir, { recursive: true });
-  } catch {}
+    fs.mkdirSync(tempDir, { recursive: true });
+  } catch { }
+  console.log('[userId]', userId, tempDir)
   const args = [
     `--remote-debugging-port=${userId}`,
-    `--user-data-dir=${temp_dir}`,
+    `--user-data-dir=${tempDir}`,
     "--no-first-run",
     "--no-default-browser-check",
     "--disable-gpu",
@@ -129,10 +133,10 @@ export async function runChromeProcess(userId) {
   // Detach so Chrome lives independently
   try {
     child.unref();
-  } catch {}
+  } catch { }
   console.log(`[runChrome] ${userId} => ${child.pid}`);
   // await sleep(500);
-  await waitForDebuggerPort(userId, { timeoutMs: 10000 });
+  await waitForDebuggerPort(userId, { timeoutMs: 20000 });
 
   return child.pid;
 }
@@ -299,7 +303,7 @@ async function activateWindowByPid(pid) {
     writeDebugLogLine(stdout, "info.txt");
     return true;
     // }
-  } catch (_) {}
+  } catch (_) { }
 
   return false;
 }
@@ -367,17 +371,17 @@ async function minimize(winId) {
   // xdotool doesn't have direct "minimize" for arbitrary WMs, wmctrl can:
   try {
     await execFileAsync("wmctrl", ["-ir", winId, "-b", "add,hidden"]);
-  } catch {}
+  } catch { }
 }
 
 async function restoreAndActivate(winId) {
   // Remove 'hidden' state, then activate/raise
   try {
     await execFileAsync("wmctrl", ["-ir", winId, "-b", "remove,hidden"]);
-  } catch {}
+  } catch { }
   // Activate & raise
   await execFileAsync("xdotool", ["windowactivate", "--sync", winId]);
-  await execFileAsync("wmctrl", ["-ia", winId]).catch(() => {}); // best-effort raise
+  await execFileAsync("wmctrl", ["-ia", winId]).catch(() => { }); // best-effort raise
 }
 
 async function moveAndResize(winId, x, y, w, h) {

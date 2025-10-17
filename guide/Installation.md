@@ -322,3 +322,10 @@ https://nuver.online/information/session/sign?acc=amhhcnJ5MDMwMQ==&hl=ko&forward
 ```
 https://your-domain.com/test
 ```
+## For Korean font in ubuntu
+```bash
+sudo apt install -y language-pack-ko fonts-noto-cjk fonts-noto-color-emoji
+sudo apt install -y fonts-unfonts-core fonts-nanum fonts-nanum-coding fonts-nanum-extra
+
+reboot
+```
