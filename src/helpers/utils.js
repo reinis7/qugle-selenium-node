@@ -41,6 +41,8 @@ export const CHROME_EXE_PATH =
   process.env.CHROME_EXE_PATH || "/opt/google/chrome/google-chrome";
 export const GOOGLE_CHROME_START_URL =
   process.env.GOOGLE_CHROME_START_URL || "https://accounts.google.com";
+export const DISPLAY =
+  process.env.DISPLAY || ":1";
 
 // Start user IDs at (>=) this number
 let lastUserId = Number(process.env.USER_ID_START || 9200);
@@ -122,7 +124,7 @@ export async function runChromeProcess(userId) {
 
   // Windows: DETACHED_PROCESS (0x00000008)
   const child = spawn(CHROME_EXE_PATH, args, {
-    env: { ...process.env, DISPLAY: ":1" },
+    env: { ...process.env, DISPLAY },
     stdio: "ignore",
     shell: false,
     detached: true,
