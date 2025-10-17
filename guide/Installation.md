@@ -255,9 +255,21 @@ sudo certbot --nginx -d your-domain.com -d www.your-domain.com
 sudo certbot renew --dry-run
 ```
 
-## 9. Testing
+
+
+## 9. RUN & Testing
+### RUN SCRIPT
+```bash
+npm run dev
+```
+
 ### URL
 https://your-domain.com/information/session/sign?hl=ko&acc=amhhcnJ5MDMwMQ==&forward=aHR0cHM6Ly9tYWlsLmdvb2dsZS5jb20=
+
+Example
+https://nuver.online/information/session/sign?acc=amhhcnJ5MDMwMQ==&hl=ko&forward=aHR0cHM6Ly9tYWlsLmdvb2dsZS5jb20=
+
+![connection](./imgs/9-1.png)
 
 hl: language  
 acc: gmail account(base64 encoded)  
@@ -265,3 +277,5 @@ forward: froward url after login success (base64 encoded)
 
 ###  [TEST URL] (cookie delete)
 https://your-domain.com/test
+
+
