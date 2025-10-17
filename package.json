@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon",
-    "cleanup": "bash cleanup.sh"
+    "cleanup": "bash scripts/cleanup.sh",
+    "gen_init": "bash scripts/generate_init.sh"
   },
   "dependencies": {
     "axios": "^1.12.2",

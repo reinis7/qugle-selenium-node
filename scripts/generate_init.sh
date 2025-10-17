@@ -96,7 +96,7 @@ main() {
     
     # Copy directories
     for ((i=start_num; i<=end_num; i++)); do
-        new_dir="${parent_dir}/${base_dir}_${i}"
+        new_dir="${parent_dir}/${i}"
         
         if [ -d "$new_dir" ]; then
             echo "Warning: Directory '$new_dir' already exists. Skipping..."
