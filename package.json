@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node app.js",
+    "start": "node src/app.js",
     "dev": "nodemon",
     "predev": "bash scripts/start-xvfb.sh",
     "prestart": "bash scripts/start-xvfb.sh",
