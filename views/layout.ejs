@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title || 'User Manager' %></title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <% if (user) { %>
+        <nav class="navbar">
+            <div class="nav-brand">User Manager</div>
+            <div class="nav-links">
+                <a href="/user-manager/dashboard">Dashboard</a>
+                <a href="/user-manager/users">Users</a>
+                <span class="user-info">Welcome, <%= user.username %></span>
+                <form action="/user-manager/logout" method="POST" class="logout-form">
+                    <button type="submit" class="logout-btn">Logout</button>
+                </form>
+            </div>
+        </nav>
+    <% } %>
+    
+    <main class="container">
+        <%- body %>
+    </main>
+</body>
+</html>

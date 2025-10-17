@@ -1,0 +1,56 @@
+<%
+const title = 'Dashboard';
+const body = `
+    <div class="dashboard-header">
+        <h1>Dashboard</h1>
+        <p>Welcome back, ${user.username}!</p>
+    </div>
+    
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>Total Users</h3>
+            <div class="stat-number">${stats.total}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Active Users</h3>
+            <div class="stat-number">${stats.active}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Inactive Users</h3>
+            <div class="stat-number">${stats.inactive}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Administrators</h3>
+            <div class="stat-number">${stats.admins}</div>
+        </div>
+    </div>
+    
+    <div class="recent-users">
+        <h2>Recent Users</h2>
+        <div class="users-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th>Role</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${recentUsers.map(user => `
+                        <tr>
+                            <td>${user.name}</td>
+                            <td>${user.email}</td>
+                            <td><span class="status-badge status-${user.status.toLowerCase()}">${user.status}</span></td>
+                            <td>${user.role}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    </div>
+`;
+%>
+
+<%- include('layout', { title, body, user }); %>

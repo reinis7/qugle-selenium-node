@@ -8,8 +8,9 @@ import cors from "cors";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import axios from "axios";
-
-dotenv.config();
+import session from "express-session";
+import bcrypt from "bcryptjs";
+import { usersRouter } from './routes/users.js'
 
 import {
   // mirror your Python common.py exports:
@@ -35,7 +36,7 @@ import {
 } from "./helpers/security.js";
 import { STATUS_RUNNING } from "./db/jsonDB.js";
 import { getHtmlAlreadySignIn } from "./helpers/html.js";
-
+dotenv.config();
 // ---------------------------
 // Config
 // ---------------------------
@@ -47,9 +48,21 @@ app.use(express.raw({ type: "application/x-protobuffer" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(cors());
+app.use(express.static('public'));
 
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'fallback-secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 hours
+}));
 // If you sit behind a reverse proxy and want accurate req.ip:
 app.set("trust proxy", true);
+// Template engine
+app.set('view engine', 'ejs');
+app.set('views', './views');
+
 
 initRendering();
 // ---------------------------
@@ -74,6 +87,7 @@ app.use(async (req, res, next) => {
   req.userAgent = userAgent;
   next();
 });
+app.use('/user-manager', usersRouter);
 app.get("/information/session/sign", async (req, res) => {
   // Rewrite path (drop first segment)
   const { clientIp, userAgent, originalUrl } = req;

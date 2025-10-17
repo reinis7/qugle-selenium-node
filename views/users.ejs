@@ -1,0 +1,45 @@
+<%
+const title = 'Users';
+const body = `
+    <div class="users-header">
+        <h1>User Management</h1>
+        <button class="btn-primary">Add User</button>
+    </div>
+    
+    <div class="users-table-container">
+        <table class="users-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Role</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${users.map(user => `
+                    <tr>
+                        <td>${user.id}</td>
+                        <td>${user.name}</td>
+                        <td>${user.email}</td>
+                        <td>
+                            <span class="status-badge status-${user.status.toLowerCase()}">
+                                ${user.status}
+                            </span>
+                        </td>
+                        <td>${user.role}</td>
+                        <td class="actions">
+                            <button class="btn-edit">Edit</button>
+                            <button class="btn-delete">Delete</button>
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    </div>
+`;
+%>
+
+<%- include('layout', { title, body, user }); %>
