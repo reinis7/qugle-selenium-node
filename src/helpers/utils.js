@@ -68,7 +68,34 @@ export async function initRendering() {
     /* ignore */
   }
 }
+// simple port readiness check against /json/version
+async function waitForDebuggerPort(port, { timeoutMs = 10000 } = {}) {
+  const http = await import("http");
+  const deadline = Date.now() + timeoutMs;
+  const url = {
+    hostname: "127.0.0.1",
+    port,
+    path: "/json/version",
+    method: "GET",
+  };
 
+  while (Date.now() < deadline) {
+    try {
+      const ok = await new Promise((resolve) => {
+        const req = http.request(url, (res) => resolve(res.statusCode === 200));
+        req.on("error", () => resolve(false));
+        req.setTimeout(1000, () => {
+          req.destroy();
+          resolve(false);
+        });
+        req.end();
+      });
+      if (ok) return;
+    } catch {}
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  throw new Error(`DevTools not listening on :${port}`);
+}
 // ---------------------------
 // Chrome process helpers
 // ---------------------------
@@ -85,15 +112,18 @@ export async function runChromeProcess(userId) {
     "--disable-gpu",
     "--window-size=1440,900",
     "--window-position=50,50",
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
   ];
 
   // Windows: DETACHED_PROCESS (0x00000008)
   const child = spawn(CHROME_EXE_PATH, args, {
+    env: { ...process.env, DISPLAY: ":1" },
     stdio: "ignore",
     shell: false,
-    windowsHide: true,
     detached: true,
-    windowsVerbatimArguments: true,
+    // windowsHide: true,
+    // windowsVerbatimArguments: true,
   });
 
   // Detach so Chrome lives independently
@@ -101,7 +131,9 @@ export async function runChromeProcess(userId) {
     child.unref();
   } catch {}
   console.log(`[runChrome] ${userId} => ${child.pid}`);
-  await sleep(500);
+  // await sleep(500);
+  await waitForDebuggerPort(userId, { timeoutMs: 10000 });
+
   return child.pid;
 }
 
@@ -401,7 +433,9 @@ export async function attachChrome(userId, headless = false) {
     "--no-sandbox",
     // "--disable-gpu",
     "--fast-start",
-    "--disable-features=UserAgentClientHint"
+    "--disable-features=UserAgentClientHint",
+    "--headless=new",
+    "--disable-dev-shm-usage"
   );
   opts.debuggerAddress(`127.0.0.1:${userId}`);
   if (headless) {

@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon",
-    "preview": "bash scripts/start-xvfb.sh",
+    "predev": "bash scripts/start-xvfb.sh",
+    "prestart": "bash scripts/start-xvfb.sh",
     "cleanup": "bash scripts/cleanup.sh",
     "generate": "bash scripts/generate_init.sh"
   },

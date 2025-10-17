@@ -23,5 +23,3 @@ if ! pgrep -u "$USER" -f "xfce4-session" >/dev/null 2>&1; then
   sleep 1
 fi
 
-# Run your preview command
-exec npm run preview:app
