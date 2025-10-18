@@ -43,6 +43,8 @@ export const GOOGLE_CHROME_START_URL =
   process.env.GOOGLE_CHROME_START_URL || "https://accounts.google.com";
 export const DISPLAY =
   process.env.DISPLAY || ":1";
+export const LANGUAGE =
+  process.env.LANG || "en";
 
 // Start user IDs at (>=) this number
 let lastUserId = Number(process.env.USER_ID_START || 9200);
@@ -444,6 +446,16 @@ export async function attachChrome(userId, headless = false) {
     "--disable-dev-shm-usage"
   );
   opts.debuggerAddress(`127.0.0.1:${userId}`);
+  if (LANGUAGE == 'ko') {
+    options.addArgument('--lang=ko')
+    options.addArgument('--accept-lang=ko-KR,ko,en-US,en')
+    // options.add_experimental_option('prefs', {
+    //   'intl.accept_languages': 'ko-KR,ko,en-US,en',
+    //   'spellcheck.language': 'ko'
+    // })
+  } else {
+    options.addArgument('--lang=en-US')
+  }
   if (headless) {
     if (opts.headless) {
       // opts.headless();
