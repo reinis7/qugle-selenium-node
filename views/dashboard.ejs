@@ -33,6 +33,7 @@ const body = `
                         <th>Status</th>
                         <th>Language</th>
                         <th>User Agent</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -44,6 +45,7 @@ const body = `
                             <td><span class="status-badge status-${user.status.toLowerCase()}">${user.status}</span></td>
                             <td>${user.lang}</td>
                             <td>${user.userAgent}</td>
+                            <td><a href="/user-manager/users/${user.userId}" class="btn-edit">View</a></td>
                         </tr>
                     `).join('')}
                 </tbody>

@@ -26,48 +26,22 @@
                     <span>${userDetail.lang}</span>
                 </div>
                 <div class="info-item">
+                    <label>Password:</label>
+                    <span>${userDetail.pwd ?? 'None'}</span>
+                </div>
+                <div class="info-item">
                     <label>User Agent:</label>
                     <span class="user-agent">${userDetail.userAgent}</span>
                 </div>
-                <div class="info-item">
-                    <label>Created At:</label>
-                    <span>
-                        ${(userDetail.createdAt) ? new Date(userDetail.createdAt).toLocaleString() : 'Unknown'}
-                    </span>
-                </div>
-            </div>
-        </div>
-
-        <!-- User Activity Logs -->
-        <div class="section-card">
-            <h2>Activity Logs</h2>
-            <div class="logs-table-container">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Action</th>
-                            <th>Timestamp</th>
-                            <th>IP Address</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${logs.map(log=>
-                        `<tr>
-                            <td>${log.action}</td>
-                            <td>${log.timestamp.toLocaleString()}</td>
-                            <td>${log.ip}</td>
-                        </tr>`
-                        ).join('')} </tbody>
-                </table>
             </div>
         </div>
 
         <!-- User Files -->
         <div class="section-card">
-            <h2>Uploaded Files</h2>
+            <h2>User Files</h2>
             ${hasFiles? `<div class="files-grid">
                 ${files.map(file=>
-                `<div class="file-card">
+                `<a href="/user-manager/download/${userDetail.userId}/files/${file.name}"  class="file-card">
                     <div class="file-icon">📄</div>
                     <div class="file-info">
                         <div class="file-name">${file.name}</div>
@@ -76,13 +50,9 @@
                             <span>${file.size}</span>
                         </div>
                         <div class="file-date">Uploaded: ${file.uploaded.toLocaleString()}</div>
-                    </div>
-                    <div class="file-actions">
-                        <a href="/user-manager/download/${userDetail.userId}/files/${file.name}" class="btn-download"
-                            download>Download</a>
-                    </div>
-                </div>`
-                ).join()}
+                    </div>                    
+                </a>`
+                ).join('')}
             </div>
             `: `<div class="no-data">
                 <p>No files found for this user.</p>
@@ -92,32 +62,23 @@
         </div>
 
         <div class="section-card">
-            <h2>Uploaded Images</h2>
+            <h2>Screenshots</h2>
             ${hasImages? `
             <div class="images-grid">
                 ${images.map(image=>
-                `<div class="image-card">
+                `<a href="/user-manager/logs/${image.fullPath}" target="_blank">
                     <div class="image-preview">
                         <div class="image-placeholder">
-                            <img src="/user-manager/logs/${userDetail.userId}/images/${image.name}" alt="${image.name}"
-                                style="max-width: 100%; max-height: 150px; object-fit: contain;">
+                            <img src="/user-manager/logs/${image.fullPath}" alt="${image.name}"
+                                style="max-width: 100%; max-height: 250px; object-fit: contain;">
                         </div>
-                        <div class="image-name">${image.name}</div>
-                    </div>
-                    <div class="image-info">
-                        <div class="image-details">
-                            <span>Size: ${image.size}</span>
-                            <span>Type: ${image.extension.toUpperCase()}</span>
-                            <span>Uploaded: ${image.uploaded.toLocaleString()}</span>
+                        <div class="image-name">
+                            <span>${image.name} </span>
+                            <span class="image-details">${image.uploaded.toLocaleString()}</span>
+
                         </div>
                     </div>
-                    <div class="image-actions">
-                        <a href="/user-manager/logs/${userDetail.userId}/images/${image.name}" target="_blank"
-                            class="btn-view">View</a>
-                        <a href="/user-manager/download/${userDetail.userId}/images/${image.name}" class="btn-download"
-                            download>Download</a>
-                    </div>
-                </div>
+                </a>
                 `
                 ).join('')}
             </div>
@@ -126,6 +87,16 @@
                 <p>Images should be located in: <code>logs/${userDetail.userId}/images/</code></p>
             </div>`
             }
+        </div>
+
+        <!-- User Activity Logs -->
+        <div class="section-card">
+            <h2>Activity Logs</h2>
+            <div class="logs-table-container">
+                <ul class="data-table activity-log">
+                    ${logs.map(log=>`<li> ${log} </li>`).join('')}
+                </ul>
+            </div>
         </div>
 
 

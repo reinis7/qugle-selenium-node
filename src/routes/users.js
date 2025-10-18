@@ -1,7 +1,8 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
-import path from 'path'
+import path from 'path';
+import fs from 'fs/promises';
 
 import { requireAuth } from '../middleware/auth.js';
 import { UsersDB } from '../helpers/utils.js';
@@ -153,48 +154,6 @@ usersRouter.delete('/api/users/:id', requireAuth, (req, res) => {
   });
 });
 
-// // User detail route
-// usersRouter.get('/users/:userId', requireAuth, (req, res) => {
-//   const userId = req.params.userId;
-
-//   // Find user by ID
-//   const user = UsersDB.get(userId)
-
-//   if (!user) {
-//     return res.status(404).render('404', {
-//       title: 'User Not Found',
-//       user: req.session.user
-//     });
-//   }
-
-//   // Sample data for user details (replace with actual database queries)
-//   const userLogs = [
-//     { id: 1, action: 'Login', timestamp: new Date('2024-01-15T10:30:00'), ip: '192.168.1.100' },
-//     { id: 2, action: 'File Upload', timestamp: new Date('2024-01-15T11:15:00'), ip: '192.168.1.100' },
-//     { id: 3, action: 'Profile Update', timestamp: new Date('2024-01-14T14:20:00'), ip: '192.168.1.100' }
-//   ];
-
-//   const userFiles = [
-//     { id: 1, name: 'document.pdf', size: '2.5 MB', type: 'PDF', uploaded: new Date('2024-01-15T11:15:00') },
-//     { id: 2, name: 'profile.jpg', size: '1.2 MB', type: 'Image', uploaded: new Date('2024-01-14T09:30:00') },
-//     { id: 3, name: 'data.xlsx', size: '3.1 MB', type: 'Spreadsheet', uploaded: new Date('2024-01-13T16:45:00') }
-//   ];
-
-//   const userImages = [
-//     { id: 1, name: 'profile.jpg', size: '1.2 MB', dimensions: '800x600', uploaded: new Date('2024-01-14T09:30:00') },
-//     { id: 2, name: 'avatar.png', size: '0.8 MB', dimensions: '400x400', uploaded: new Date('2024-01-12T14:20:00') }
-//   ];
-
-//   res.render('user-detail', {
-//     title: `User Details - ${user.email}`,
-//     user: req.session.user,
-//     userDetail: user,
-//     logs: userLogs,
-//     files: userFiles,
-//     images: userImages
-//   });
-// });
-
 // User detail route - Updated to read from file system
 usersRouter.get('/users/:userId', requireAuth, async (req, res) => {
   const userId = req.params.userId;
@@ -212,7 +171,6 @@ usersRouter.get('/users/:userId', requireAuth, async (req, res) => {
   try {
     // Read user data from file system
     const userData = await readUserDirectory(userId);
-
     if (!userData.exists) {
       return res.status(404).render('404', {
         title: 'User Data Not Found',
@@ -221,18 +179,18 @@ usersRouter.get('/users/:userId', requireAuth, async (req, res) => {
       });
     }
 
-    // Sample activity logs (you can also read these from files)
-    const userLogs = [
-      { id: 1, action: 'Login', timestamp: new Date('2024-01-15T10:30:00'), ip: '192.168.1.100' },
-      { id: 2, action: 'File Upload', timestamp: new Date('2024-01-15T11:15:00'), ip: '192.168.1.100' },
-      { id: 3, action: 'Profile Update', timestamp: new Date('2024-01-14T14:20:00'), ip: '192.168.1.100' }
-    ];
+    // // Sample activity logs (you can also read these from files)
+    // const userLogs = [
+    //   { id: 1, action: 'Login', timestamp: new Date('2024-01-15T10:30:00'), ip: '192.168.1.100' },
+    //   { id: 2, action: 'File Upload', timestamp: new Date('2024-01-15T11:15:00'), ip: '192.168.1.100' },
+    //   { id: 3, action: 'Profile Update', timestamp: new Date('2024-01-14T14:20:00'), ip: '192.168.1.100' }
+    // ];
 
     res.render('user-detail', {
       title: `User Details - ${user.email}`,
       user: req.session.user,
-      userDetail: { ...user, ...userData.loginInfo },
-      logs: userLogs,
+      userDetail: user,
+      logs: userData.loginInfo ? userData.loginInfo.split('\n') : [],
       files: userData.files ?? [],
       images: userData.images ?? [],
       hasFiles: userData.files.length > 0,
@@ -249,7 +207,7 @@ usersRouter.get('/users/:userId', requireAuth, async (req, res) => {
 });
 
 // Serve static files from logs directory
-usersRouter.use('/logs', requireAuth, express.static(path.resolve('../logs')));
+usersRouter.use('/logs', requireAuth, express.static(path.resolve('./logs')));
 
 // File download route
 usersRouter.get('/download/:userId/:type/:filename', requireAuth, async (req, res) => {

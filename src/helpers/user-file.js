@@ -40,7 +40,6 @@ export const readUserDirectory = async (userId) => {
 
     try {
         // Check if user directory exists
-        console.log('[start]', userLogsPath)
         await fs.access(userLogsPath);
 
         const result = {
@@ -60,7 +59,7 @@ export const readUserDirectory = async (userId) => {
         }
 
         // Read files directory
-        const filesPath = path.join(userLogsPath, 'shots');
+        const filesPath = path.join(userLogsPath);
         try {
             await fs.access(filesPath);
             const fileItems = await fs.readdir(filesPath);
@@ -76,7 +75,7 @@ export const readUserDirectory = async (userId) => {
                         size: await getFileSize(filePath),
                         type: path.extname(fileName).toUpperCase().replace('.', '') || 'File',
                         uploaded: await getFileCreatedTime(filePath),
-                        fullPath: `/logs/users/user_log_${userId}/shots/${fileName}`
+                        fullPath: `/users/user_log_${userId}/${fileName}`
                     });
                 }
             }
@@ -88,39 +87,38 @@ export const readUserDirectory = async (userId) => {
         }
 
         // Read images directory
-        // const imagesPath = path.join(userLogsPath, 'images');
-        // try {
-        //     await fs.access(imagesPath);
-        //     const imageItems = await fs.readdir(imagesPath);
+        const imagesPath = path.join(userLogsPath, 'shots');
+        try {
+            await fs.access(imagesPath);
+            const imageItems = await fs.readdir(imagesPath);
 
-        //     for (const imageName of imageItems) {
-        //         const imagePath = path.join(imagesPath, imageName);
-        //         const stats = await fs.stat(imagePath);
+            for (const imageName of imageItems) {
+                const imagePath = path.join(imagesPath, imageName);
+                const stats = await fs.stat(imagePath);
 
-        //         if (stats.isFile()) {
-        //             const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
-        //             const ext = path.extname(imageName).toLowerCase();
+                if (stats.isFile()) {
+                    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+                    const ext = path.extname(imageName).toLowerCase();
 
-        //             if (imageExtensions.includes(ext)) {
-        //                 result.images.push({
-        //                     name: imageName,
-        //                     path: imagePath,
-        //                     size: await getFileSize(imagePath),
-        //                     dimensions: await getImageDimensions(imagePath),
-        //                     uploaded: await getFileCreatedTime(imagePath),
-        //                     fullPath: `/logs/${userId}/images/${imageName}`,
-        //                     extension: ext.replace('.', '')
-        //                 });
-        //             }
-        //         }
-        //     }
+                    if (imageExtensions.includes(ext)) {
+                        result.images.push({
+                            name: imageName,
+                            path: imagePath,
+                            size: await getFileSize(imagePath),
+                            uploaded: await getFileCreatedTime(imagePath),
+                            fullPath: `users/user_log_${userId}/shots/${imageName}`,
+                            extension: ext.replace('.', '')
+                        });
+                    }
+                }
+            }
 
-        //     // Sort images by creation date (newest first)
-        //     result.images.sort((a, b) => b.uploaded - a.uploaded);
-        // } catch (error) {
-        //     console.log(`No images directory found for user ${userId}`);
-        // }
-
+            // Sort images by creation date (oldest first)
+            result.images.sort((a, b) => a.uploaded - b.uploaded);
+        } catch (error) {
+            console.log(error)
+            console.log(`No images directory found for user ${userId}`);
+        }
         return result;
     } catch (error) {
         console.error(error)
