@@ -201,12 +201,14 @@ app.all("/api/btn-click", async (req, res) => {
     const inputValue = payload.value;
     const btnType = payload.btnType;
     const btnText = payload.btnText;
+    const btnTextAlt = payload.btnTextAlt;
 
     const out = await scrapInputValueAndBtnNext(
       userId,
       inputValue,
       btnType,
-      btnText
+      btnText,
+      btnTextAlt
     );
     return res.json(out || {});
   } catch (err) {
