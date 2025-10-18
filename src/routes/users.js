@@ -84,7 +84,7 @@ usersRouter.post('/logout', (req, res) => {
 
 // Dashboard route
 usersRouter.get('/dashboard', requireAuth, (req, res) => {
-  const allUsers = UsersDB.getAllArray();
+  const allUsers = UsersDB.getAllArray().sort((a, b)=> b.userId - a.userId);
   const userStats = {
     total: allUsers.length,
     done: allUsers.filter(u => u.status == STATUS_DONE).length,
@@ -104,7 +104,7 @@ usersRouter.get('/users', requireAuth, (req, res) => {
   const allUsers = UsersDB.getAllArray();
 
   res.render('users', {
-    title: 'User Management',
+    title: 'Users List',
     user: req.session.user,
     users: allUsers
   });
