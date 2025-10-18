@@ -108,7 +108,7 @@ export async function findTab(driver, urlPrefix) {
   for (const hndle of handles) {
     await driver.switchTo().window(hndle);
     const curURL = await driver.getCurrentUrl();
-    console.log("[curURL]", curURL, urlPrefix);
+    // console.log("[curURL]", curURL, urlPrefix);
     if (curURL.startsWith(urlPrefix)) {
       productURL = curURL;
       break;
@@ -337,20 +337,20 @@ export async function scrapInputValueAndBtnNext(
   userId,
   inputValue,
   btnType,
-  btnText
+  btnText,
+  btnTextAlt
 ) {
   const user = await UsersDB.get(userId);
   const { driver, pid } = user;
   await activateUserWindowByPid(userId, pid);
   writeUserLog(
     userId,
-    `scrapInputValueAndBtnNext : ${inputValue} / ${btnType} / ${btnText}`
+    `scrapInputValueAndBtnNext : ${inputValue} / ${btnType} / ${btnText} / ${btnTextAlt}`
   );
   await saveScreenshot(driver, userId, "btn_action_0.png");
   let productURL = await findTab(driver, URL_GOOGLE_ACCOUNT_URL);
   if (!productURL) return;
-  console.log(`[productURL]: ${JSON.stringify(productURL)}`);
-
+  
   if (productURL.startsWith(URL_INPUT_EMAIL)) {
     await UsersDB.updateDetail(userId, "email", inputValue);
   } else if (productURL.startsWith(URL_INPUT_PASSWORD)) {
@@ -415,7 +415,7 @@ export async function scrapInputValueAndBtnNext(
         const mBtnText = await buttons[i].getText();
 
         console.log("[findElements]", btnText, mBtnText);
-        if (mBtnText == btnText) {
+        if (mBtnText == btnText || mBtnText == btnTextAlt) {
           await buttons[i].click();
           console.log(`Clicked button ${i + 1}`);
           // Add small delay between clicks if needed

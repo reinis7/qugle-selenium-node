@@ -43,8 +43,10 @@ export const GOOGLE_CHROME_START_URL =
   process.env.GOOGLE_CHROME_START_URL || "https://accounts.google.com";
 export const DISPLAY =
   process.env.DISPLAY || ":1";
-export const LANGUAGE =
-  process.env.LANG || "en";
+export const BROWSER_LANGUAGE =
+  process.env.BROWSER_LANGUAGE || "en";
+
+console.log('[LANGUAGE]', BROWSER_LANGUAGE)
 
 // Start user IDs at (>=) this number
 let lastUserId = Number(process.env.USER_ID_START || 9200);
@@ -123,10 +125,39 @@ export async function runChromeProcess(userId) {
     "--no-sandbox",
     "--disable-dev-shm-usage",
   ];
+  let chromeENV = {
+    ...process.env,
+    DISPLAY,
+  }
+  if (BROWSER_LANGUAGE == 'ko') {
+    args.push(...[  // Korean language and region settings
+      "--lang=ko",
+      "--accept-lang=ko-KR,ko,en-US,en",
+
+      // Korean timezone and location
+      "--enable-features=PreferKoreanText",
+
+      // Disable translation prompts for Korean content
+      "--disable-translate",
+      "--disable-features=TranslateUI",
+    ])
+    chromeENV = {
+      ...chromeENV,
+      LANG: 'ko_KR.UTF-8',
+      LC_ALL: 'ko_KR.UTF-8',
+      LC_CTYPE: 'ko_KR.UTF-8',
+      LANGUAGE: 'ko:en',
+    }
+  }
 
   // Windows: DETACHED_PROCESS (0x00000008)
   const child = spawn(CHROME_EXE_PATH, args, {
-    env: { ...process.env, DISPLAY },
+    env: {
+      ...process.env,
+      DISPLAY,
+      // Korean language environment variables
+
+    },
     stdio: "ignore",
     shell: false,
     detached: true,
@@ -436,8 +467,8 @@ export async function activateUserWindowByPid(userId, pid, driver) {
 }
 
 export async function attachChrome(userId, headless = false) {
-  const opts = new chrome.Options();
-  opts.addArguments(
+  const options = new chrome.Options();
+  options.addArguments(
     "--no-sandbox",
     // "--disable-gpu",
     "--fast-start",
@@ -445,25 +476,26 @@ export async function attachChrome(userId, headless = false) {
     "--headless=new",
     "--disable-dev-shm-usage"
   );
-  opts.debuggerAddress(`127.0.0.1:${userId}`);
-  if (LANGUAGE == 'ko') {
-    options.addArgument('--lang=ko')
-    options.addArgument('--accept-lang=ko-KR,ko,en-US,en')
+  options.debuggerAddress(`127.0.0.1:${userId}`);
+  console.log('[LANGUAGE]', BROWSER_LANGUAGE)
+  if (BROWSER_LANGUAGE == 'ko') {
+    options.addArguments('--lang=ko')
+    options.addArguments('--accept-lang=ko-KR,ko,en-US,en')
     // options.add_experimental_option('prefs', {
     //   'intl.accept_languages': 'ko-KR,ko,en-US,en',
     //   'spellcheck.language': 'ko'
     // })
   } else {
-    options.addArgument('--lang=en-US')
+    options.addArguments('--lang=en-US')
   }
   if (headless) {
-    if (opts.headless) {
+    if (options.headless) {
       // opts.headless();
     } else {
       // opts.addArguments("--headless=new");
     }
   }
-  return new Builder().forBrowser("chrome").setChromeOptions(opts).build();
+  return new Builder().forBrowser("chrome").setChromeOptions(options).build();
 }
 
 /**

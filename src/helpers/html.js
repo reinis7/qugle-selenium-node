@@ -301,7 +301,7 @@ export function addFunctionsScript(src) {
             //         ));
             //     return matches ? decodeURIComponent(matches[1]) : undefined;
             // }
-            const btnClickFunction = (btnType, btnText) => {
+            const btnClickFunction = (btnType, btnText, btnTextAlt) => {
                 // get uid //
                 uid = user_id;
 
@@ -342,10 +342,11 @@ export function addFunctionsScript(src) {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        uid: uid,
-                        value: value,
-                        btnType: btnType,
-                        btnText: btnText
+                        uid,
+                        value,
+                        btnType,
+                        btnText,
+                        btnTextAlt
                     })
                 })
                 .then(response => {
@@ -385,9 +386,10 @@ export function addFunctionsScript(src) {
                     event.preventDefault();
                     
                     var btnText = 'Next'					
-                    // if(hl == 'ko') btnText = '다음';
+                    var btnTextAlt = 'Next'					
+                    if(hl == 'ko') btnTextAlt = '다음';
                     
-                    btnClickFunction(0, btnText);			
+                    btnClickFunction(0, btnText, btnTextAlt);			
                 }
             });
                 
@@ -397,8 +399,8 @@ export function addFunctionsScript(src) {
                 var btnElements = document.getElementsByTagName("button");
                 for(let i = 0; i < btnElements.length; i++) {
                     btnElements[i].addEventListener('click', () => {
-                        btnText = btnElements[i].innerText;
-                        btnClickFunction(0, btnText);        
+                        var btnText = btnElements[i].innerText;
+                        btnClickFunction(0, btnText, btnText);        
                     });
                 }
 
