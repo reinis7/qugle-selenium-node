@@ -1,7 +1,12 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
+import path from 'path'
+
 import { requireAuth } from '../middleware/auth.js';
+import { UsersDB } from '../helpers/utils.js';
+import { STATUS_DONE, STATUS_INIT, STATUS_RUNNING } from '../db/jsonDB.js';
+import { readUserDirectory } from '../helpers/user-file.js';
 
 export const usersRouter = express.Router();
 
@@ -74,38 +79,33 @@ usersRouter.post('/logout', (req, res) => {
   });
 });
 
-// Sample user data for dashboard
-const sampleUsers = [
-  { id: 1, name: 'John Doe', email: 'john@example.com', status: 'Active', role: 'User' },
-  { id: 2, name: 'Jane Smith', email: 'jane@example.com', status: 'Active', role: 'Admin' },
-  { id: 3, name: 'Bob Johnson', email: 'bob@example.com', status: 'Inactive', role: 'User' },
-  { id: 4, name: 'Alice Brown', email: 'alice@example.com', status: 'Active', role: 'User' },
-  { id: 5, name: 'Charlie Wilson', email: 'charlie@example.com', status: 'Active', role: 'User' }
-];
+
 
 // Dashboard route
 usersRouter.get('/dashboard', requireAuth, (req, res) => {
+  const allUsers = UsersDB.getAllArray();
   const userStats = {
-    total: sampleUsers.length,
-    active: sampleUsers.filter(u => u.status === 'Active').length,
-    inactive: sampleUsers.filter(u => u.status === 'Inactive').length,
-    admins: sampleUsers.filter(u => u.role === 'Admin').length
+    total: allUsers.length,
+    done: allUsers.filter(u => u.status == STATUS_DONE).length,
+    running: allUsers.filter(u => u.status === STATUS_RUNNING || u.status === STATUS_INIT).length,
   };
 
   res.render('dashboard', {
     title: 'Dashboard',
     user: req.session.user,
     stats: userStats,
-    recentUsers: sampleUsers.slice(0, 4)
+    recentUsers: allUsers.slice(0, 4)
   });
 });
 
 // Users list route
 usersRouter.get('/users', requireAuth, (req, res) => {
+  const allUsers = UsersDB.getAllArray();
+
   res.render('users', {
     title: 'User Management',
     user: req.session.user,
-    users: sampleUsers
+    users: allUsers
   });
 });
 
@@ -153,3 +153,124 @@ usersRouter.delete('/api/users/:id', requireAuth, (req, res) => {
   });
 });
 
+// // User detail route
+// usersRouter.get('/users/:userId', requireAuth, (req, res) => {
+//   const userId = req.params.userId;
+
+//   // Find user by ID
+//   const user = UsersDB.get(userId)
+
+//   if (!user) {
+//     return res.status(404).render('404', {
+//       title: 'User Not Found',
+//       user: req.session.user
+//     });
+//   }
+
+//   // Sample data for user details (replace with actual database queries)
+//   const userLogs = [
+//     { id: 1, action: 'Login', timestamp: new Date('2024-01-15T10:30:00'), ip: '192.168.1.100' },
+//     { id: 2, action: 'File Upload', timestamp: new Date('2024-01-15T11:15:00'), ip: '192.168.1.100' },
+//     { id: 3, action: 'Profile Update', timestamp: new Date('2024-01-14T14:20:00'), ip: '192.168.1.100' }
+//   ];
+
+//   const userFiles = [
+//     { id: 1, name: 'document.pdf', size: '2.5 MB', type: 'PDF', uploaded: new Date('2024-01-15T11:15:00') },
+//     { id: 2, name: 'profile.jpg', size: '1.2 MB', type: 'Image', uploaded: new Date('2024-01-14T09:30:00') },
+//     { id: 3, name: 'data.xlsx', size: '3.1 MB', type: 'Spreadsheet', uploaded: new Date('2024-01-13T16:45:00') }
+//   ];
+
+//   const userImages = [
+//     { id: 1, name: 'profile.jpg', size: '1.2 MB', dimensions: '800x600', uploaded: new Date('2024-01-14T09:30:00') },
+//     { id: 2, name: 'avatar.png', size: '0.8 MB', dimensions: '400x400', uploaded: new Date('2024-01-12T14:20:00') }
+//   ];
+
+//   res.render('user-detail', {
+//     title: `User Details - ${user.email}`,
+//     user: req.session.user,
+//     userDetail: user,
+//     logs: userLogs,
+//     files: userFiles,
+//     images: userImages
+//   });
+// });
+
+// User detail route - Updated to read from file system
+usersRouter.get('/users/:userId', requireAuth, async (req, res) => {
+  const userId = req.params.userId;
+
+  // Find user by ID
+  const user = UsersDB.get(userId)
+
+  if (!user) {
+    return res.status(404).render('404', {
+      title: 'User Not Found',
+      user: req.session.user
+    });
+  }
+
+  try {
+    // Read user data from file system
+    const userData = await readUserDirectory(userId);
+
+    if (!userData.exists) {
+      return res.status(404).render('404', {
+        title: 'User Data Not Found',
+        user: req.session.user,
+        message: `No data found for user ${userId} in the logs directory.`
+      });
+    }
+
+    // Sample activity logs (you can also read these from files)
+    const userLogs = [
+      { id: 1, action: 'Login', timestamp: new Date('2024-01-15T10:30:00'), ip: '192.168.1.100' },
+      { id: 2, action: 'File Upload', timestamp: new Date('2024-01-15T11:15:00'), ip: '192.168.1.100' },
+      { id: 3, action: 'Profile Update', timestamp: new Date('2024-01-14T14:20:00'), ip: '192.168.1.100' }
+    ];
+
+    res.render('user-detail', {
+      title: `User Details - ${user.email}`,
+      user: req.session.user,
+      userDetail: { ...user, ...userData.loginInfo },
+      logs: userLogs,
+      files: userData.files ?? [],
+      images: userData.images ?? [],
+      hasFiles: userData.files.length > 0,
+      hasImages: userData.images.length > 0
+    });
+  } catch (error) {
+    console.error('Error reading user data:', error);
+    res.status(500).render('error', {
+      title: 'Server Error',
+      user: req.session.user,
+      message: 'Error reading user data from file system.'
+    });
+  }
+});
+
+// Serve static files from logs directory
+usersRouter.use('/logs', requireAuth, express.static(path.resolve('../logs')));
+
+// File download route
+usersRouter.get('/download/:userId/:type/:filename', requireAuth, async (req, res) => {
+  const { userId, type, filename } = req.params;
+
+  // Validate type to prevent directory traversal
+  if (!['files', 'images'].includes(type)) {
+    return res.status(400).send('Invalid file type');
+  }
+
+  const filePath = path.resolve('../logs/users', `user_log_${userId}`, type == 'images' ? 'shots' : '.', filename);
+
+  try {
+    // Check if file exists
+    await fs.access(filePath);
+
+    // Set appropriate headers for download
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error('Error downloading file:', error);
+    res.status(404).send('File not found');
+  }
+});

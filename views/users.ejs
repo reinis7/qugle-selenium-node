@@ -1,45 +1,43 @@
-<%
-const title = 'Users';
-const body = `
-    <div class="users-header">
-        <h1>User Management</h1>
-        <button class="btn-primary">Add User</button>
+<% const title='Users' ; const body=` <div class="users-header">
+    <h1>User Management</h1>
+    <button class="btn-primary">Add User</button>
     </div>
-    
+
     <div class="users-table-container">
         <table class="users-table">
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>Name</th>
+                    <th>USER ID</th>
                     <th>Email</th>
+                    <th>Password</th>
                     <th>Status</th>
-                    <th>Role</th>
+                    <th>Lang</th>
+                    <th>User Agent</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 ${users.map(user => `
-                    <tr>
-                        <td>${user.id}</td>
-                        <td>${user.name}</td>
-                        <td>${user.email}</td>
-                        <td>
-                            <span class="status-badge status-${user.status.toLowerCase()}">
-                                ${user.status}
-                            </span>
-                        </td>
-                        <td>${user.role}</td>
-                        <td class="actions">
-                            <button class="btn-edit">Edit</button>
-                            <button class="btn-delete">Delete</button>
-                        </td>
-                    </tr>
+                <tr>
+                    <td>${user.userId}</td>
+                    <td>${user.email}</td>
+                    <td>${user.pwd ?? ''}</td>
+                    <td>
+                        <span class="status-badge status-${user.status.toLowerCase()}">
+                            ${user.status}
+                        </span>
+                    </td>
+                    <td>${user.lang}</td>
+                    <td>${user.userAgent}</td>
+                    <td class="actions">
+                         <a href="/user-manager/users/${user.userId}" class="btn-edit">View</a>     
+                    </td>
+                </tr>
                 `).join('')}
             </tbody>
         </table>
     </div>
-`;
-%>
+    `;
+    %>
 
-<%- include('layout', { title, body, user }); %>
+    <%- include('layout', { title, body, user }); %>

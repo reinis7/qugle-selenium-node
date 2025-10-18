@@ -246,7 +246,12 @@ export async function saveScreenshot(driver, userId, screenshotName) {
     if (!driver) return;
     const scrnShotData = await driver.takeScreenshot();
     const userDir = ensureUserLogDir(userId);
-    const screenShotPath = path.join(userDir, screenshotName);
+    const screenShotDir = path.join(userDir, 'shots');
+    if(!fs.existsSync(screenShotDir)) {
+      fs.mkdirSync(screenShotDir)
+    }
+    
+    const screenShotPath = path.join(screenShotDir, screenshotName);
     // Save to file
     fs.writeFileSync(screenShotPath, scrnShotData, "base64");
     return true;
