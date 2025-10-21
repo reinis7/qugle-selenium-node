@@ -12,7 +12,6 @@
 import fs from "fs";
 import path from "path";
 import { spawn, execFile } from "child_process";
-// file: setActiveChromeWindow.js
 import psList from "ps-list";
 import { promisify } from "util";
 import chrome from "selenium-webdriver/chrome.js";
@@ -27,26 +26,57 @@ import {
 } from "./logger.js";
 import { createJSONDatabase, STATUS_DONE } from "../db/jsonDB.js";
 
-
 dotenv.config();
 
 // ---------------------------
-// Config (tweak as needed)
+// Configuration Constants
 // ---------------------------
 export const USERS_LOG_DIR = process.env.LOG_DIR || path.resolve("./logs");
-export const DEBUG_LOG_DIR =
-  process.env.DEBUG_LOG_DIR || path.resolve("./debug/logs");
+export const DEBUG_LOG_DIR = process.env.DEBUG_LOG_DIR || path.resolve("./debug/logs");
 export const CHROME_TEMP_DIR = process.env.CHROME_TEMP_DIR || "/chromeTEMP";
-export const CHROME_EXE_PATH =
-  process.env.CHROME_EXE_PATH || "/opt/google/chrome/google-chrome";
-export const GOOGLE_CHROME_START_URL =
-  process.env.GOOGLE_CHROME_START_URL || "https://accounts.google.com";
-export const DISPLAY =
-  process.env.DISPLAY || ":1";
-export const BROWSER_LANGUAGE =
-  process.env.BROWSER_LANGUAGE || "en";
+export const CHROME_EXE_PATH = process.env.CHROME_EXE_PATH || "/opt/google/chrome/google-chrome";
+export const GOOGLE_CHROME_START_URL = process.env.GOOGLE_CHROME_START_URL || "https://accounts.google.com";
+export const DISPLAY = process.env.DISPLAY || ":1";
+export const BROWSER_LANGUAGE = process.env.BROWSER_LANGUAGE || "en";
 
-console.log('[LANGUAGE]', BROWSER_LANGUAGE)
+// Chrome process configuration
+const CHROME_ARGS = [
+  "--no-first-run",
+  "--no-default-browser-check",
+  "--disable-gpu",
+  "--window-size=1440,900",
+  "--window-position=50,50",
+  "--no-sandbox",
+  "--disable-dev-shm-usage",
+];
+
+const KOREAN_CHROME_ARGS = [
+  "--lang=ko",
+  "--accept-lang=ko-KR,ko,en-US,en",
+  "--enable-features=PreferKoreanText",
+  "--disable-translate",
+  "--disable-features=TranslateUI",
+];
+
+const KOREAN_ENV_VARS = {
+  LANG: 'ko_KR.UTF-8',
+  LC_ALL: 'ko_KR.UTF-8',
+  LC_CTYPE: 'ko_KR.UTF-8',
+  LANGUAGE: 'ko:en',
+};
+
+// Window management constants
+const MAX_ONE_VIEW_CNT = 6;
+const PIX_STEP = 30;
+const WND_W = 1440;
+const WND_H = 1080;
+
+// Timeouts
+const DEBUGGER_PORT_TIMEOUT_MS = 10000;
+const CHROME_START_TIMEOUT_MS = 20000;
+const DRIVER_HEALTH_TIMEOUT_MS = 2000;
+
+console.log('[LANGUAGE]', BROWSER_LANGUAGE);
 
 // Start user IDs at (>=) this number
 let lastUserId = Number(process.env.USER_ID_START || 9200);
@@ -54,31 +84,50 @@ let lastUserId = Number(process.env.USER_ID_START || 9200);
 const userIdToPid = new Map(); // userId -> pid
 
 export let UsersDB = createJSONDatabase("users.json");
-//
 
+// ---------------------------
+// Initialization Functions
+// ---------------------------
 export async function initRendering() {
-  // Ensure folders exist
-  for (const dir of [USERS_LOG_DIR, CHROME_TEMP_DIR]) {
-    try {
-      fs.mkdirSync(dir, { recursive: true });
-    } catch { }
-  }
-
-  // Initialize last_user_id by scanning existing log folders (user_log_<id>)
   try {
-    const entries = fs.readdirSync(USERS_LOG_DIR, { withFileTypes: true });
-    for (const d of entries) {
-      if (d.isDirectory() && d.name.startsWith("user_log_")) {
-        const n = Number(d.name.slice("user_log_".length));
-        if (!Number.isNaN(n)) lastUserId = Math.max(lastUserId, n + 1);
+    // Ensure required directories exist
+    const directories = [USERS_LOG_DIR, CHROME_TEMP_DIR];
+    
+    for (const dir of directories) {
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+      } catch (error) {
+        console.warn(`Failed to create directory ${dir}:`, error.message);
       }
     }
-  } catch {
-    /* ignore */
+
+    // Initialize lastUserId by scanning existing log folders
+    await initializeLastUserId();
+  } catch (error) {
+    console.error('Error initializing rendering:', error);
   }
 }
-// simple port readiness check against /json/version
-async function waitForDebuggerPort(port, { timeoutMs = 10000 } = {}) {
+
+async function initializeLastUserId() {
+  try {
+    const entries = fs.readdirSync(USERS_LOG_DIR, { withFileTypes: true });
+    
+    for (const entry of entries) {
+      if (entry.isDirectory() && entry.name.startsWith("user_log_")) {
+        const userId = Number(entry.name.slice("user_log_".length));
+        if (!Number.isNaN(userId)) {
+          lastUserId = Math.max(lastUserId, userId + 1);
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to scan existing user directories:', error.message);
+  }
+}
+// ---------------------------
+// Chrome Process Management
+// ---------------------------
+async function waitForDebuggerPort(port, { timeoutMs = DEBUGGER_PORT_TIMEOUT_MS } = {}) {
   const http = await import("http");
   const deadline = Date.now() + timeoutMs;
   const url = {
@@ -90,7 +139,7 @@ async function waitForDebuggerPort(port, { timeoutMs = 10000 } = {}) {
 
   while (Date.now() < deadline) {
     try {
-      const ok = await new Promise((resolve) => {
+      const isReady = await new Promise((resolve) => {
         const req = http.request(url, (res) => resolve(res.statusCode === 200));
         req.on("error", () => resolve(false));
         req.setTimeout(1000, () => {
@@ -99,81 +148,74 @@ async function waitForDebuggerPort(port, { timeoutMs = 10000 } = {}) {
         });
         req.end();
       });
-      if (ok) return;
-    } catch { }
-    await new Promise((r) => setTimeout(r, 200));
+      
+      if (isReady) return;
+    } catch (error) {
+      // Continue polling
+    }
+    
+    await new Promise((resolve) => setTimeout(resolve, 200));
   }
+  
   throw new Error(`DevTools not listening on :${port}`);
 }
-// ---------------------------
-// Chrome process helpers
-// ---------------------------
 export async function runChromeProcess(userId) {
-  const tempDir = path.join(CHROME_TEMP_DIR, String(userId));
   try {
-    fs.mkdirSync(tempDir, { recursive: true });
-  } catch { }
-  console.log('[userId]', userId, tempDir)
-  const args = [
-    `--remote-debugging-port=${userId}`,
-    `--user-data-dir=${tempDir}`,
-    "--no-first-run",
-    "--no-default-browser-check",
-    "--disable-gpu",
-    "--window-size=1440,900",
-    "--window-position=50,50",
-    "--no-sandbox",
-    "--disable-dev-shm-usage",
-  ];
-  let chromeENV = {
-    ...process.env,
-    DISPLAY,
-  }
-  if (BROWSER_LANGUAGE == 'ko') {
-    args.push(...[  // Korean language and region settings
-      "--lang=ko",
-      "--accept-lang=ko-KR,ko,en-US,en",
-
-      // Korean timezone and location
-      "--enable-features=PreferKoreanText",
-
-      // Disable translation prompts for Korean content
-      "--disable-translate",
-      "--disable-features=TranslateUI",
-    ])
-    chromeENV = {
-      ...chromeENV,
-      LANG: 'ko_KR.UTF-8',
-      LC_ALL: 'ko_KR.UTF-8',
-      LC_CTYPE: 'ko_KR.UTF-8',
-      LANGUAGE: 'ko:en',
+    const tempDir = path.join(CHROME_TEMP_DIR, String(userId));
+    
+    // Create temp directory
+    try {
+      fs.mkdirSync(tempDir, { recursive: true });
+    } catch (error) {
+      console.warn(`Failed to create temp directory ${tempDir}:`, error.message);
     }
-  }
-
-  // Windows: DETACHED_PROCESS (0x00000008)
-  const child = spawn(CHROME_EXE_PATH, args, {
-    env: {
+    
+    console.log('[userId]', userId, tempDir);
+    
+    // Build Chrome arguments
+    const args = [
+      `--remote-debugging-port=${userId}`,
+      `--user-data-dir=${tempDir}`,
+      ...CHROME_ARGS,
+    ];
+    
+    // Add Korean-specific arguments if needed
+    if (BROWSER_LANGUAGE === 'ko') {
+      args.push(...KOREAN_CHROME_ARGS);
+    }
+    
+    // Set up environment variables
+    const chromeEnv = {
       ...process.env,
       DISPLAY,
-      // Korean language environment variables
+      ...(BROWSER_LANGUAGE === 'ko' ? KOREAN_ENV_VARS : {}),
+    };
 
-    },
-    stdio: "ignore",
-    shell: false,
-    detached: true,
-    // windowsHide: true,
-    // windowsVerbatimArguments: true,
-  });
+    // Spawn Chrome process
+    const child = spawn(CHROME_EXE_PATH, args, {
+      env: chromeEnv,
+      stdio: "ignore",
+      shell: false,
+      detached: true,
+    });
 
-  // Detach so Chrome lives independently
-  try {
-    child.unref();
-  } catch { }
-  console.log(`[runChrome] ${userId} => ${child.pid}`);
-  // await sleep(500);
-  await waitForDebuggerPort(userId, { timeoutMs: 20000 });
+    // Detach process
+    try {
+      child.unref();
+    } catch (error) {
+      console.warn('Failed to unref Chrome process:', error.message);
+    }
+    
+    console.log(`[runChrome] ${userId} => ${child.pid}`);
+    
+    // Wait for debugger port to be ready
+    await waitForDebuggerPort(userId, { timeoutMs: CHROME_START_TIMEOUT_MS });
 
-  return child.pid;
+    return child.pid;
+  } catch (error) {
+    console.error('Error running Chrome process:', error);
+    throw error;
+  }
 }
 
 function closeChromeWindowWithPid(pid) {
@@ -376,10 +418,7 @@ export async function setActiveChromeWindow(
 }
 
 // ---- Tunables (match your Python constants) ----
-const MAX_ONE_VIEW_CNT = 6; // adjust as needed
-const PIX_STEP = 30; // adjust as needed
-const WND_W = 1440; // desired window width
-const WND_H = 1080; // desired window height
+// These constants are already defined above
 
 async function getScreenSize() {
   // Parse from xdpyinfo: line like "dimensions:    1920x1080 pixels"
