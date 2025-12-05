@@ -9,7 +9,8 @@
     "predev": "bash scripts/start-xvfb.sh",
     "prestart": "bash scripts/start-xvfb.sh",
     "cleanup": "bash scripts/cleanup.sh",
-    "generate": "bash scripts/generate_init.sh"
+    "generate": "bash scripts/generate_init.sh",
+    "build-ng-profile": "bash scripts/generate_init.sh"
   },
   "dependencies": {
     "axios": "^1.12.2",
